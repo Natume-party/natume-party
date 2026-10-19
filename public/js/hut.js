@@ -1,7 +1,9 @@
 // 小屋里的内容：关于我 / 作品 / 日记。内容放在 /content 下的 Markdown 文件里。
 // 地址栏路由：#/about、#/works、#/diary、#/diary/<slug>，可以直接分享某一篇。
 
-const TABS = { about: '关于我', works: '作品', diary: '日记' };
+import { renderGuestbook } from './guestbook.js';
+
+const TABS = { about: '关于我', works: '作品', diary: '日记', guestbook: '留言' };
 
 const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const safeUrl = (u) => (/^(https?:|mailto:|\/|#|\.\/)/i.test(u) ? u : '#');
@@ -67,7 +69,7 @@ export function initHut({ onClose } = {}) {
   let token = 0;
 
   function parse(hash) {
-    const m = (hash || '').match(/^#\/(about|works|diary)(?:\/([\w-]+))?$/);
+    const m = (hash || '').match(/^#\/(about|works|diary|guestbook)(?:\/([\w-]+))?$/);
     return m ? { tab: m[1], slug: m[2] || null } : null;
   }
 
@@ -75,6 +77,11 @@ export function initHut({ onClose } = {}) {
     const my = ++token;
     tabs.forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === route.tab)));
     content.setAttribute('aria-busy', 'true');
+    if (route.tab === 'guestbook') {
+      content.removeAttribute('aria-busy');
+      await renderGuestbook(content);
+      return;
+    }
     let html;
     try {
       if (route.tab === 'diary') {

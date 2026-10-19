@@ -251,3 +251,35 @@ body.no-ui .hud, body.no-ui #hint, body.no-ui #toast, body.no-ui #panel-toggle {
 @media (prefers-reduced-motion: reduce) {
   .identity-link:hover { transform: none; }
 }
+
+/* Natume guestbook styling; inherits the hut's paper and brown ink palette. */
+.guestbook { display:grid;gap:12px; }
+.guestbook h2,.guestbook h3 { margin:0; }
+.gb-intro { color:#78634a; margin:0!important; }
+.gb-form { display:grid;gap:7px;padding:13px;background:rgba(255,255,255,.72);border:1px solid #dfcdb2;border-radius:8px; }
+.gb-form label,#gb-login label { font-size:12px;font-weight:700; }
+.gb-form input,.gb-form textarea,#gb-login input,.gb-owner textarea {width:100%;padding:9px;border:1px solid #baa98e;border-radius:6px;background:#fffdf8;color:#2e2a22;font:inherit;min-width:0;resize:vertical;}
+.gb-form small { color:#7a674f;line-height:1.5; }
+.gb-form button,.gb-head button,.gb-owner button {background:#557949;color:#fff;border:0;border-radius:6px;padding:8px 12px;min-height:36px;font-weight:700;}
+.gb-form button:disabled,.gb-owner button:disabled { opacity:.6; }
+#gb-status {margin:0!important;font-size:13px;color:#a33a27;min-height:1em;}
+#gb-status.ok,#gb-owner-status.ok{color:#487841;}
+.gb-head {display:flex;align-items:center;justify-content:space-between;}
+.gb-head button{background:#bdac90;color:#332819;min-height:30px;padding:5px 10px;}
+.gb-entry,.gb-admin-entry {padding:10px 0;border-bottom:1px dashed #cdb99c;}
+.gb-entry-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline;}
+.gb-entry-head time{color:#89735b;font-size:12px;}
+.gb-text {white-space:pre-wrap;overflow-wrap:anywhere;margin:5px 0!important;}
+.gb-reply{margin:10px 0 0 15px;padding:9px 11px;background:#ecf0df;border-left:3px solid #78a36b;border-radius:0 7px 7px 0;}
+.gb-reply strong{color:#487841;}
+.gb-reply p{white-space:pre-wrap;overflow-wrap:anywhere;margin:3px 0 0!important;}
+.gb-empty{font-size:13px;color:#796549;}
+.gb-owner{border-top:1px dashed #c8b597;padding:9px 0;font-size:12px;}
+.gb-owner summary{color:#79664b;cursor:pointer;}
+#gb-login{display:grid;gap:7px;padding:10px 0;}
+.gb-admin-actions{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap;}
+.gb-admin-actions button{font-size:12px;padding:5px 8px;}
+@media(max-width:640px){
+.identity-link{flex:1 1 calc(50% - 6px);}
+.gb-entry-head{flex-wrap:wrap;}
+}
