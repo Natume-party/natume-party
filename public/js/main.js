@@ -361,6 +361,46 @@ flowerOrder.forEach((f, i) => {
 });
 scene.add(stemMesh, petalMesh);
 
+// ---------- 杂草与浮萍 ----------
+const TUFT_COLORS = {
+  spring: ['#74c04c', '#87cf63', '#63aa42'],
+  summer: ['#4d9939', '#59a53c', '#468534'],
+  autumn: ['#9c9c45', '#b09c47', '#8a8d3a'],
+  winter: ['#cfd8cf', '#c2cdc6', '#d8ded6'],
+};
+const TUFT_N = W.tufts.length;
+const tuftMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.075, 0.52, 0.075), new THREE.MeshLambertMaterial(), TUFT_N * 3);
+tuftMesh.frustumCulled = false;
+scene.add(tuftMesh);
+const tuftSeed = new Float32Array(TUFT_N * 3);
+W.tufts.forEach((t, i) => {
+  for (let k = 0; k < 3; k++) {
+    const j = i * 3 + k;
+    const a = t.rot + k * 2.1;
+    dummy.position.set(t.x + Math.cos(a) * 0.1, t.y + 0.22 * t.s, t.z + Math.sin(a) * 0.1);
+    dummy.rotation.set(Math.cos(a) * 0.22, a, Math.sin(a) * 0.18);
+    dummy.scale.set(1, t.s * (0.75 + k * 0.18), 1);
+    dummy.updateMatrix();
+    tuftMesh.setMatrixAt(j, dummy.matrix);
+    tuftSeed[j] = (t.v + k * 0.37) % 1;
+  }
+});
+tuftMesh.instanceMatrix.needsUpdate = true;
+
+const lilyMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.42, 0.04, 0.42), new THREE.MeshLambertMaterial({ color: 0x5f9440 }), Math.max(1, W.lilies.length));
+W.lilies.forEach((l, i) => {
+  dummy.position.set(l.x, 0.14, l.z);
+  dummy.rotation.set(0, l.rot, 0);
+  dummy.scale.set(l.s, 1, l.s);
+  dummy.updateMatrix();
+  lilyMesh.setMatrixAt(i, dummy.matrix);
+});
+lilyMesh.count = W.lilies.length;
+lilyMesh.castShadow = false;
+scene.add(lilyMesh);
+
+
+
 const reedMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.09, 1, 0.09), new THREE.MeshLambertMaterial(), W.reeds.length);
 const cattailMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.16, 0.32, 0.16), new THREE.MeshLambertMaterial({ color: 0x7a5232 }), W.reeds.length);
 W.reeds.forEach((r, i) => {
@@ -614,6 +654,14 @@ function applySeason() {
     flowerOrder.forEach((f, i) => petalMesh.setColorAt(i, tmpColor.set(pal[Math.floor(f.c * pal.length)])));
     petalMesh.instanceColor.needsUpdate = true;
   }
+  // 草叶跟着季节换色；冬天被雪盖住就收起来
+  const tp = TUFT_COLORS[s] || TUFT_COLORS.summer;
+  for (let j = 0; j < TUFT_N * 3; j++) {
+    tuftMesh.setColorAt(j, tmpColor.set(tp[Math.floor(tuftSeed[j] * tp.length)]));
+  }
+  if (tuftMesh.instanceColor) tuftMesh.instanceColor.needsUpdate = true;
+  tuftMesh.count = s === 'winter' ? 0 : TUFT_N * 3;
+
   const shown = Math.round(flowerOrder.length * FLOWER_SHOW[s]);
   petalMesh.count = stemMesh.count = shown;
   W.reeds.forEach((_, i) => reedMesh.setColorAt(i, tmpColor.set(REED[s])));

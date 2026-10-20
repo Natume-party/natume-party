@@ -218,6 +218,44 @@ export function generateWorld() {
     }
   }
 
+  // ---- 杂草：成片的长草（位置导出，main.js 用实例化画）----
+  const tufts = [];
+  for (let i = 0; i < 5200 && tufts.length < 1050; i++) {
+    const a = rng() * Math.PI * 2, r = 3.5 + Math.sqrt(rng()) * 19;
+    const xw = Math.cos(a) * r, zw = Math.sin(a) * r;
+    if (fbm(xw * 0.32 + 2, zw * 0.32 - 5) < 0.4) continue;
+    const xb = Math.round(xw * V), zb = Math.round(zw * V);
+    const h = getH(xb, zb);
+    if (h !== 0 || grid.get(xb, 0, zb) !== T.GRASS || grid.get(xb, 1, zb)) continue;
+    if (Math.abs(zw - riverZ(xw)) < RIVER_HALF + 0.7) continue;
+    if (isPath(xw, zw)) continue;
+    if (rectDist(HUT_ZONE, xw, zw) < 0.7 || rectDist(TREE_ZONE, xw, zw) < 0.9) continue;
+    tufts.push({ x: xw, z: zw, y: h / V, s: 0.65 + rng() * 0.7, rot: rng() * 3.14, v: rng() });
+  }
+
+  // ---- 河岸：浮萍 + 倒木 ----
+  const lilies = [];
+  for (let i = 0; i < 90 && lilies.length < 18; i++) {
+    const x = -17 + rng() * 34;
+    const side = rng() < 0.5 ? -1 : 1;
+    const z = riverZ(x) + side * (RIVER_HALF - 0.55 - rng() * 1.2);
+    const xb = Math.round(x * V), zb = Math.round(z * V);
+    if (grid.get(xb, 0, zb) !== T.WATER) continue;
+    lilies.push({ x: xb / V, z: zb / V, s: 0.55 + rng() * 0.55, rot: rng() * 3.14 });
+  }
+  for (let i = 0; i < 10; i++) {
+    const x = -18 + rng() * 36;
+    const side = rng() < 0.5 ? -1 : 1;
+    const z = riverZ(x) + side * (RIVER_HALF + 0.3 + rng() * 0.9);
+    const xb = Math.round(x * V), zb = Math.round(z * V);
+    const h = getH(xb, zb);
+    if (h !== 0 || grid.get(xb, h, zb) !== T.GRASS) continue;
+    const len = 2 + Math.round(rng() * 3);
+    for (let k = 0; k < len; k++) {
+      if (!grid.get(xb + k, h + 1, zb)) grid.set(xb + k, h + 1, zb, T.LOG);
+    }
+  }
+
   // ---- 山上的树：成片分布、三种树型、尺寸抖动 ----
   const blob = (cx, cy, cz, rx, ry, rz, leaf, holes = 0.22) => {
     const RX = Math.ceil(rx), RY = Math.ceil(ry), RZ = Math.ceil(rz);
@@ -293,6 +331,37 @@ export function generateWorld() {
         );
       }
     }
+  }
+
+  // ---- 灌木与小树：把草地的边界做软 ----
+  const meadowSpot = (rMin, rMax, pad) => {
+    const a = rng() * Math.PI * 2, r = rMin + rng() * (rMax - rMin);
+    const xw = Math.cos(a) * r, zw = Math.sin(a) * r;
+    const xb = Math.round(xw * V), zb = Math.round(zw * V);
+    const h = getH(xb, zb);
+    if (h < 0 || h > 2 * V) return null;
+    if (Math.abs(zw - riverZ(xw)) < RIVER_HALF + 1) return null;
+    if (isPath(xw, zw)) return null;
+    if (rectDist(HUT_ZONE, xw, zw) < pad || rectDist(TREE_ZONE, xw, zw) < pad) return null;
+    if (grid.get(xb, h, zb) !== T.GRASS) return null;
+    return { xb, zb, h, xw, zw };
+  };
+  for (let i = 0, n = 0; i < 90 && n < 16; i++) {
+    const spot = meadowSpot(8, 21, 2.2);
+    if (!spot) continue;
+    n++;
+    const rr = Math.max(2, Math.round((0.45 + rng() * 0.35) * V));
+    const bt = rng() < 0.45 ? T.LEAF_A : rng() < 0.6 ? T.TLEAF : T.LEAF_B;
+    blob(spot.xb, spot.h + Math.max(1, Math.round(rr * 0.4)), spot.zb, rr, Math.max(2, Math.round(rr * 0.7)), rr, bt, 0.3);
+  }
+  for (let i = 0, n = 0; i < 70 && n < 7; i++) {
+    const spot = meadowSpot(10, 22, 2.4);
+    if (!spot) continue;
+    n++;
+    const th = Math.round((1.3 + rng() * 1.1) * V);
+    for (let y = 1; y <= th; y++) grid.set(spot.xb, spot.h + y, spot.zb, T.TLOG);
+    const rr = Math.max(2, Math.round((0.7 + rng() * 0.5) * V));
+    blob(spot.xb, spot.h + th + Math.round(rr * 0.5), spot.zb, rr, Math.round(rr * 0.9), rr, T.TLEAF, 0.26);
   }
 
   // ---- 茅草屋：石基座 + 半木构架 + 窗台门框 + 双坡茅草顶 ----
@@ -501,13 +570,18 @@ export function generateWorld() {
   const reeds = [];
   for (let x = -26; x <= 26; x++) {
     for (const side of [-1, 1]) {
-      if (rng() > 0.32) continue;
-      const z = riverZ(x) + side * (RIVER_HALF + 0.2 + rng() * 0.9);
+      if (rng() > 0.26) continue;
       if (x >= PATH_X0 - 1 && x <= PATH_X1 + 1) continue;
-      const zb = Math.round(z * V), xb = Math.round(x * V);
-      const h = getH(xb, zb);
-      if (h !== 0 || grid.get(xb, 1, zb)) continue;
-      reeds.push({ x: x + (rng() - 0.5) * 0.6, z, h: 1 + rng() * 0.8, v: rng() });
+      // 一丛 2-5 根，高矮不一，别像插了一排杆子
+      const n = 2 + Math.floor(rng() * 4);
+      for (let k = 0; k < n; k++) {
+        const cx = x + (rng() - 0.5) * 0.8;
+        const z = riverZ(cx) + side * (RIVER_HALF + 0.15 + rng() * 0.8);
+        const zb = Math.round(z * V), xb = Math.round(cx * V);
+        const h = getH(xb, zb);
+        if (h !== 0 || grid.get(xb, 1, zb)) continue;
+        reeds.push({ x: cx, z, h: 0.75 + rng() * 0.95, v: rng() });
+      }
     }
   }
 
@@ -535,6 +609,7 @@ export function generateWorld() {
 
   return {
     grid, getH: heightAtWorld, topAt, windows, chimney, fruitSpots, flowerSpots, groundFlowers, reeds, bridge,
+    tufts, lilies,
     door: { x: (doorX0 + doorX1) / 2 / V, z: HUT.z1 },
   };
 }
