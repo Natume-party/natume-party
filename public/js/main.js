@@ -867,8 +867,13 @@ function removeFallen(f) {
 function clearFallen() { while (fallen.length) removeFallen(fallen[0]); }
 
 // ---------- 交互用的隐藏碰撞盒 ----------
-const treeHit = new THREE.Mesh(new THREE.BoxGeometry(9, 8, 8.4), hitMat);
-treeHit.position.set(TREE.x, 4.8, TREE.z);
+// 树冠精修后最高叶面可能超过旧固定碰撞盒的 y=8.8 上边界。
+// 根据世界生成器给出的实际树冠顶端动态扩高，保留原有水平点按范围。
+const treeHitBottom = -0.4;
+const treeHitTop = Math.max(10.4, W.modelQA.treeCanopyTop + 0.5);
+const treeHit = new THREE.Mesh(new THREE.BoxGeometry(9, treeHitTop - treeHitBottom, 8.4), hitMat);
+treeHit.position.set(TREE.x, (treeHitBottom + treeHitTop) / 2, TREE.z);
+W.modelQA.treeHitTopMargin = treeHitTop - W.modelQA.treeCanopyTop;
 const doorHit = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.6, 1.4), hitMat);
 doorHit.position.set(W.door.x, 1.6, W.door.z + 0.6);
 treeHit.visible = doorHit.visible = false;
