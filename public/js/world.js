@@ -689,37 +689,50 @@ export function generateWorld() {
   };
   // 半径按细分倍数折算：V=2 时同样的「块数」会粗出 1.5 倍，树干会胖成一堵墙
   const TR = V / 3;
-  // 主干：带一点倾斜
-  limb(tbx, 0, tbz, tbx + W3(0.22), W3(1.9), tbz + W3(0.08), 1.9 * TR, 1.5 * TR);
-  limb(tbx + W3(0.22), W3(1.75), tbz + W3(0.08), tbx + W3(0.42), W3(3.5), tbz + W3(0.16), 1.5 * TR, 1.15 * TR);
-  // 三条主枝
-  limb(tbx + W3(0.3), W3(2.9), tbz + W3(0.1), tbx - W3(1.4), W3(6.2), tbz + W3(0.9), 1.25 * TR, 0.8 * TR);
-  limb(tbx + W3(0.3), W3(3.1), tbz + W3(0.1), tbx + W3(1.5), W3(6.4), tbz - W3(1.0), 1.25 * TR, 0.8 * TR);
-  limb(tbx + W3(0.3), W3(3.2), tbz + W3(0.1), tbx + W3(0.2), W3(6.6), tbz + W3(1.5), 1.25 * TR, 0.8 * TR);
-  // 二级小枝
-  limb(tbx - W3(1.4), W3(6.2), tbz + W3(0.9), tbx - W3(2.4), W3(7.2), tbz + W3(1.8), 0.7 * TR, 0.5 * TR);
-  limb(tbx + W3(1.5), W3(6.4), tbz - W3(1.0), tbx + W3(2.5), W3(7.4), tbz - W3(1.8), 0.7 * TR, 0.5 * TR);
-
-  // 冠簇：五团分离的球，彼此留缝
+  // V3.2 重点枣树：保留自然轻微歪斜，主干与骨架重心仍围绕树根。
+  // 两侧三维主枝的长度、落点和高度成对均衡；不要直接镜像叶缘噪声。
+  limb(tbx, 0, tbz, tbx + W3(0.08), W3(2.1), tbz + W3(0.05), 1.9 * TR, 1.42 * TR);
+  limb(tbx + W3(0.08), W3(2.0), tbz + W3(0.05),
+    tbx + W3(0.18), W3(4.1), tbz + W3(0.08), 1.42 * TR, 1.06 * TR);
+  const crownArms = [
+    {x:-2.35,z:0.92,y:6.28}, {x:2.35,z:-0.78,y:6.38},
+    {x:-0.96,z:-2.12,y:6.48}, {x:1.13,z:2.08,y:6.52},
+    {x:0.05,z:0.1,y:7.5},
+  ];
+  for (const arm of crownArms) {
+    limb(tbx + W3(0.17), W3(3.62), tbz + W3(0.08),
+      tbx + W3(arm.x * 0.66), W3((arm.y + 3.62) / 2),
+      tbz + W3(arm.z * 0.65), 1.08 * TR, 0.78 * TR);
+    limb(tbx + W3(arm.x * 0.66), W3((arm.y + 3.62) / 2),
+      tbz + W3(arm.z * 0.65), tbx + W3(arm.x), W3(arm.y),
+      tbz + W3(arm.z), 0.78 * TR, 0.38 * TR);
+  }
+  // 非完全球形的冠簇：中心承重层 + 均衡的外围树冠 + 小顶冠。
+  // 果实与花依然从最终 leafCells 中抽取，互动逻辑不变。
   const clusters = [
-    { x: tbx - W3(1.9), y: W3(7.5), z: tbz + W3(1.1), r: 6 },
-    { x: tbx + W3(2.0), y: W3(7.6), z: tbz - W3(1.2), r: 6 },
-    { x: tbx + W3(0.3), y: W3(8.3), z: tbz + W3(1.5), r: 5 },
-    { x: tbx + W3(0.1), y: W3(8.5), z: tbz - W3(0.2), r: 6 },
-    { x: tbx - W3(1.2), y: W3(7.8), z: tbz - W3(1.8), r: 5 },
+    {x:0.0,z:0.0,y:7.70,rx:2.06,ry:1.65,rz:1.85},
+    {x:-2.10,z:0.85,y:7.14,rx:1.92,ry:1.36,rz:1.68},
+    {x:2.17,z:-0.74,y:7.22,rx:1.90,ry:1.41,rz:1.70},
+    {x:-1.14,z:-1.91,y:7.52,rx:1.65,ry:1.38,rz:1.62},
+    {x:1.04,z:1.94,y:7.48,rx:1.67,ry:1.37,rz:1.64},
+    {x:-0.90,z:0.45,y:8.52,rx:1.43,ry:1.09,rz:1.38},
+    {x:1.03,z:-0.39,y:8.61,rx:1.42,ry:1.12,rz:1.40},
   ];
   const leafCells = [];
-  for (const c of clusters) {
-    const R = Math.max(3, Math.round(c.r * V / 3));
-    for (let dx = -R; dx <= R; dx++) for (let dy = -R; dy <= R; dy++) for (let dz = -R; dz <= R; dz++) {
-      const e = (dx * dx + dy * dy + dz * dz) / (R * R);
-      if (e > 1) continue;
-      const x = c.x + dx, y = c.y + dy, z = c.z + dz;
-      if (grid.get(x, y, z)) continue;
-      // 边缘多挖一点，剪影才不像一个整球
-      if (e > 0.55 && hash3(x, y, z) < 0.16) continue;
-      grid.set(x, y, z, T.TLEAF);
-      leafCells.push({ x, y, z, e, cy: c.y, R });
+  for (let k=0; k<clusters.length; k++) {
+    const c=clusters[k];
+    const cx=tbx+W3(c.x), cy=W3(c.y), cz=tbz+W3(c.z);
+    const rx=Math.max(3,W3(c.rx)), ry=Math.max(3,W3(c.ry)), rz=Math.max(3,W3(c.rz));
+    for(let dx=-rx; dx<=rx; dx++) for(let dy=-ry; dy<=ry; dy++) for(let dz=-rz; dz<=rz; dz++){
+      const e=(dx/rx)**2+(dy/ry)**2+(dz/rz)**2;
+      // 控制体积明暗起伏，但只在轮廓附近扣边，不要挖穿树冠。
+      const rough=0.075*(hash3(cx+dx*2,cy+dy*3,cz+dz*2)-0.5);
+      if(e>1-rough)continue;
+      const x=cx+dx,y=cy+dy,z=cz+dz;
+      if(grid.get(x,y,z))continue;
+      if(e>0.69 && hash3(x,y,z)<0.11)continue;
+      grid.set(x,y,z,T.TLEAF);
+      leafCells.push({x,y,z,e,cy,R:Math.max(rx,rz)});
     }
   }
   const pickCells = (arr, n) => {
