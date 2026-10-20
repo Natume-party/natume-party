@@ -493,6 +493,52 @@ cattailMesh.count = Math.round(W.reeds.length * 0.45);
 reedMesh.castShadow = true;
 scene.add(reedMesh, cattailMesh);
 
+// ---------- V3.1 坡地独立布景：低矮灌木团和散石 ----------
+const HILL_SHRUB_COLORS = {
+  spring: ['#829f76', '#9bae80', '#71977b', '#a9b78c'],
+  summer: ['#648966', '#7b9670', '#557c69', '#909f71'],
+  autumn: ['#a89563', '#b59b72', '#8a9364', '#b4a16d'],
+  winter: ['#9cabb0', '#aeb8b2', '#b8b5a3', '#859998'],
+};
+const HILL_N = W.hillShrubs.length;
+const hillShrubMesh = new THREE.InstancedMesh(
+  new THREE.BoxGeometry(0.46, 0.27, 0.43),
+  new THREE.MeshLambertMaterial(), Math.max(1, HILL_N * 2));
+hillShrubMesh.castShadow = false;
+hillShrubMesh.receiveShadow = true;
+hillShrubMesh.frustumCulled = false;
+W.hillShrubs.forEach((p, i) => {
+  for (let k = 0; k < 2; k++) {
+    const offset = (k === 0 ? -0.13 : 0.17) * p.size;
+    dummy.position.set(p.x + Math.sin(p.rot) * offset,
+      p.y + (k === 0 ? 0.14 : 0.22) * p.size,
+      p.z + Math.cos(p.rot) * offset);
+    dummy.rotation.set(0, p.rot + k * 0.9, 0);
+    dummy.scale.set(p.size * (k ? 0.67 : 1), p.size * (k ? 0.74 : 1), p.size * (k ? 0.7 : 1));
+    dummy.updateMatrix();
+    hillShrubMesh.setMatrixAt(i * 2 + k, dummy.matrix);
+  }
+});
+hillShrubMesh.count = HILL_N * 2;
+hillShrubMesh.instanceMatrix.needsUpdate = true;
+scene.add(hillShrubMesh);
+const stoneMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.5, 0.18, 0.35),
+  new THREE.MeshLambertMaterial(), Math.max(1, W.hillStones.length));
+const STONE_TINT = ['#9e9b8d', '#b3ab97', '#919c95', '#ada391'];
+W.hillStones.forEach((p, i) => {
+  dummy.position.set(p.x, p.y + 0.055 * p.size, p.z);
+  dummy.rotation.set(0, p.rot, 0);
+  dummy.scale.set(p.size, 0.75 + p.v * 0.6, p.size * (0.8 + p.v * 0.35));
+  dummy.updateMatrix();
+  stoneMesh.setMatrixAt(i, dummy.matrix);
+  stoneMesh.setColorAt(i, new THREE.Color(STONE_TINT[Math.floor(p.v * STONE_TINT.length)]));
+});
+stoneMesh.count = W.hillStones.length;
+stoneMesh.frustumCulled = false;
+stoneMesh.castShadow = false;
+stoneMesh.instanceMatrix.needsUpdate = true;
+scene.add(stoneMesh);
+
 // ---------- 萤火：夜里的草坡上慢慢飘 ----------
 const FIRE_N = 44;
 const fireMat = new THREE.MeshBasicMaterial({ color: 0xffe6a0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
@@ -804,6 +850,16 @@ function applySeason() {
   }
   if (tuftMesh.instanceColor) tuftMesh.instanceColor.needsUpdate = true;
   tuftMesh.count = s === 'winter' ? 0 : TUFT_INSTANCE_COUNT;
+
+  // 山地灌木跟随季节，色调与前景区分，避免四季都用同一抹荧光绿。
+  const hc = HILL_SHRUB_COLORS[s] || HILL_SHRUB_COLORS.summer;
+  W.hillShrubs.forEach((p, i) => {
+    for (let k = 0; k < 2; k++) {
+      const tint = Math.floor(((p.v + k * 0.31) % 1) * hc.length);
+      hillShrubMesh.setColorAt(i * 2 + k, tmpColor.set(hc[tint]));
+    }
+  });
+  if (hillShrubMesh.instanceColor) hillShrubMesh.instanceColor.needsUpdate = true;
 
   const shown = Math.round(flowerOrder.length * FLOWER_SHOW[s]);
   petalMesh.count = stemMesh.count = shown;

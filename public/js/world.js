@@ -470,6 +470,35 @@ export function generateWorld() {
     blob(spot.xb, spot.h + th + Math.round(rr * 0.5), spot.zb, rr, Math.round(rr * 0.9), rr, T.TLEAF, 0.26);
   }
 
+  // ---- V3.1 山坡微生态：独立于河边草甸的布景规则 ----
+  // 贴合真实高度场；山脊留白，山脚略密，林缘聚集，避免填满每一个坡面。
+  const hillShrubs = [], hillStones = [];
+  const hillRng = mulberry32(20261020);
+  for (let i = 0; i < 4600 && (hillShrubs.length < 120 || hillStones.length < 180); i++) {
+    const a = hillRng() * Math.PI * 2, r = 16 + Math.sqrt(hillRng()) * 34;
+    const x = Math.cos(a) * r, z = Math.sin(a) * r;
+    const xb = Math.round(x * V), zb = Math.round(z * V);
+    const h = getH(xb, zb);
+    if (h <= V || h > 12 * V) continue;
+    if (grid.get(xb, h, zb) !== T.GRASS || grid.get(xb, h + 1, zb)) continue;
+    if (Math.abs(z - riverZ(x)) < RIVER_HALF + 2.6) continue;
+    if (isPath(x, z) || rectDist(HUT_ZONE, x, z) < 4 || rectDist(TREE_ZONE, x, z) < 4) continue;
+    const patch = fbm(x * 0.085 + 7, z * 0.085 - 3);
+    const exposed = fbm(x * 0.14 - 9, z * 0.14 + 12);
+    const onShrubPatch = patch > 0.465 && exposed > 0.31;
+    // 山腰和山脚有元素，山顶只保留少量孤立岩石。
+    const shrub = onShrubPatch && hillRng() > 0.39 && hillShrubs.length < 120;
+    const stone = (patch < 0.51 || exposed > 0.63) && hillStones.length < 180;
+    const y = (h + 0.5) / V;
+    if (shrub && !hillShrubs.some(p => Math.hypot(p.x - x, p.z - z) < 1.45)) {
+      hillShrubs.push({ x, z, y, size: 0.45 + hillRng() * 0.6, rot: hillRng() * 6.283,
+        v: hillRng() });
+    } else if (stone && hillRng() < 0.58 && !hillStones.some(p => Math.hypot(p.x - x, p.z - z) < 1.05)) {
+      hillStones.push({ x, z, y, size: 0.45 + hillRng() * 0.7, rot: hillRng() * 6.283,
+        v: hillRng() });
+    }
+  }
+
   // ---- 风车：远处山脊上的地标 ----
   const WM = { x: -8, z: -28 };
   const wmx = Math.round(WM.x * V), wmz = Math.round(WM.z * V);
@@ -759,7 +788,7 @@ export function generateWorld() {
 
   return {
     grid, getH: heightAtWorld, topAt, windows, chimney, fruitSpots, flowerSpots, groundFlowers, reeds, bridge,
-    tufts, lilies,
+    tufts, lilies, hillShrubs, hillStones,
     windmill: hub ? { hub, ground: wmGround / V, top: wmTop / V } : null,
     door: { x: (doorX0 + doorX1) / 2 / V, z: HUT.z1 },
   };
