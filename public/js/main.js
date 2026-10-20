@@ -671,6 +671,10 @@ function updateSky(hour) {
   porchLight.intensity = nightness * 26;
 
   cloudMat.color.copy(COL.cloudNight).lerp(COL.cloudDay, day).lerp(COL.cloudDusk, dusk * 0.5);
+  // 夜里把草地上的小花一起压暗，否则会变成一片发光的彩色噪点
+  const flowerDim = 0.28 + 0.72 * day;
+  stemMesh.material.color.setScalar(flowerDim);
+  petalMesh.material.color.setScalar(flowerDim);
   if (state.rain) cloudMat.color.lerp(cTmp.copy(COL.cloudNight).lerp(COL.cloudRain, day), 0.8);
   rainMat.color.copy(COL.rainLineNight).lerp(COL.rainLineDay, day);
   snowMat.color.setScalar(0.45 + 0.55 * day);
