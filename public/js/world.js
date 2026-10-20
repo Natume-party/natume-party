@@ -424,8 +424,12 @@ export function generateWorld() {
     const trunkH = Math.max(2 * V, Math.round((pine ? 2.9 : 2.2) * sc * V));
     for (let y = 1; y <= trunkH; y++) {
       const wide = y <= Math.ceil(trunkH * 0.35);
-      const n = wide ? Math.max(2, Math.round(V / 2)) : 1;
-      for (let i = 0; i < n; i++) for (let k = 0; k < n; k++) grid.set(xb + i, h + y, zb + k, T.MLOG);
+      // 原版粗树干从 xb/zb 往正方向增长，使主干相对树冠偏轴。
+      // 改成奇数占格、以树冠轴线为中心，PC 与触屏都不会单侧突出。
+      const halfWidth = wide && V >= 3 ? 1 : 0;
+      for (let dx=-halfWidth; dx<=halfWidth; dx++)
+        for (let dz=-halfWidth; dz<=halfWidth; dz++)
+          grid.set(xb+dx, h+y, zb+dz, T.MLOG);
     }
     const top = h + trunkH;
     if (pine) {
@@ -561,7 +565,9 @@ export function generateWorld() {
   const wy0 = fy + 1;                  // 墙底
   const wy1 = wy0 + 3 * V - 1;         // 墙顶（3 个世界单位）
   const doorB = Math.round(HUT.doorX * V);
-  const doorX0 = doorB - Math.floor((V - 1) / 2), doorX1 = doorX0 + V - 1;
+  // 偶数细分 V=2 无法用偶数个格子以整数轴线为中心：采用 3 格门洞。
+  const doorCells = V % 2 === 0 ? V + 1 : V;
+  const doorX0 = doorB - Math.floor(doorCells / 2), doorX1 = doorX0 + doorCells - 1;
   const doorY0 = wy0, doorY1 = wy0 + 2 * V - 1;
   const boxFill = (x0, x1, y0, y1, z0, z1, t) => {
     for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) grid.set(x, y, z, t);
@@ -569,15 +575,20 @@ export function generateWorld() {
   const inRing = (x, z) => x === hx0 || x === hx1 || z === hz0 || z === hz1;
 
   // 窗洞：前墙两扇、两侧各一扇，1 个单位见方
+  // 窗洞宽度取奇数体素格，保证两窗与房屋中心的镜像轴严格吻合。
+  const windowCells = V % 2 === 0 ? V + 1 : V;
+  const frontLeft0 = Math.round(-10.6 * V - (windowCells - 1) / 2);
+  const frontRight0 = hx0 + hx1 - (frontLeft0 + windowCells - 1);
+  const side0 = Math.round((hz0 + hz1 - windowCells + 1) / 2);
   const winDefs = [
-    { axis: 'z', b: Math.round(-10.6 * V), wall: hz1 },
-    { axis: 'z', b: Math.round(-7.4 * V), wall: hz1 },
-    { axis: 'x', b: Math.round(-9 * V), wall: hx0 },
-    { axis: 'x', b: Math.round(-9 * V), wall: hx1 },
+    { axis: 'z', a0: frontLeft0, wall: hz1 },
+    { axis: 'z', a0: frontRight0, wall: hz1 },
+    { axis: 'x', a0: side0, wall: hx0 },
+    { axis: 'x', a0: side0, wall: hx1 },
   ].map((w) => {
-    const a0 = w.b - Math.floor((V - 1) / 2);
     const y0 = wy0 + 2;
-    return { ...w, a0, a1: a0 + V - 1, y0, y1: y0 + V - 1, dir: (w.axis === 'z' ? w.wall === hz1 : w.wall === hx1) ? 1 : -1 };
+    return { ...w, a1:w.a0 + windowCells - 1, y0, y1:y0 + windowCells - 1,
+      dir: (w.axis === 'z' ? w.wall === hz1 : w.wall === hx1) ? 1 : -1 };
   });
   const isWindowCell = (x, y, z) => winDefs.some((w) => {
     if (y < w.y0 || y > w.y1) return false;
@@ -837,7 +848,13 @@ export function generateWorld() {
     grid, getH: heightAtWorld, topAt, windows, chimney, fruitSpots, flowerSpots, groundFlowers, reeds, bridge,
     tufts, lilies, hillShrubs, hillStones,
     windmill: hub ? { hub, ground: wmGround / V, top: wmTop / V } : null,
-    door: { x: (doorX0 + doorX1) / 2 / V, z: HUT.z1 },
+    door: { x: (doorX0 + doorX1) / 2 / V, z: HUT.z1, width: doorCells / V },
+    windowWidth: windowCells / V,
+    modelQA: {
+      doorCenterError: Math.abs((doorX0 + doorX1) / 2 / V - HUT.doorX),
+      frontWindowMirrorError: Math.abs((windows[0].x + windows[1].x) / 2 - HUT.doorX),
+      sideWindowAlignError: Math.abs(windows[2].z - windows[3].z),
+    },
   };
 }
 

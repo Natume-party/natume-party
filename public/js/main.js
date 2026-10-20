@@ -225,24 +225,25 @@ const windowTex = (() => {
 })();
 const windowMat = new THREE.MeshBasicMaterial({ map: windowTex, color: 0xa8d4e6 });
 for (const w of W.windows) {
-  const geo = w.axis === 'z' ? new THREE.BoxGeometry(1, 1, 0.14) : new THREE.BoxGeometry(0.14, 1, 1);
+  const ws = W.windowWidth;
+  const geo = w.axis === 'z' ? new THREE.BoxGeometry(ws, ws, 0.14) : new THREE.BoxGeometry(0.14, ws, ws);
   const m = new THREE.Mesh(geo, windowMat);
   m.position.set(w.x, w.y, w.z);
   scene.add(m);
   // V3.2 四扇窗共用同尺寸的立体木框；前墙左右两窗镜像一致。
   const frameMat = new THREE.MeshLambertMaterial({ color: 0x69523b });
   const face = w.axis === 'z';
-  const thickness = 0.105, depth = 0.18;
+  const thickness = 0.105, depth = 0.18, he = ws / 2;
   const frame = new THREE.Group();
   frame.position.set(w.x, w.y, w.z);
-  for(const edge of [-0.5,0.5]){
+  for(const edge of [-he,he]){
     const vertical = new THREE.Mesh(
-      new THREE.BoxGeometry(face?thickness:depth, 1.12, face?depth:thickness), frameMat);
+      new THREE.BoxGeometry(face?thickness:depth, ws + 0.12, face?depth:thickness), frameMat);
     if(face)vertical.position.x=edge;
     else vertical.position.z=edge;
     frame.add(vertical);
     const horizontal = new THREE.Mesh(
-      new THREE.BoxGeometry(face?1.12:depth, thickness, face?depth:1.12), frameMat);
+      new THREE.BoxGeometry(face?ws + 0.12:depth, thickness, face?depth:ws + 0.12), frameMat);
     horizontal.position.y=edge;
     frame.add(horizontal);
   }
@@ -251,12 +252,12 @@ for (const w of W.windows) {
 
 const plankTex = tileTexture(TILE_ID.PLANK);
 const doorPivot = new THREE.Group();
-doorPivot.position.set(W.door.x - 0.5, 1.5, W.door.z + 0.1);
-const door = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 0.16), new THREE.MeshLambertMaterial({ map: plankTex, color: 0x9a6a40 }));
-door.position.x = 0.5;
+doorPivot.position.set(W.door.x - W.door.width / 2, 1.5, W.door.z + 0.1);
+const door = new THREE.Mesh(new THREE.BoxGeometry(W.door.width, 2, 0.16), new THREE.MeshLambertMaterial({ map: plankTex, color: 0x9a6a40 }));
+door.position.x = W.door.width / 2;
 door.castShadow = true;
 const knob = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.12), new THREE.MeshLambertMaterial({ color: 0xe0b85a }));
-knob.position.set(0.78, -0.05, 0.12);
+knob.position.set(W.door.width * 0.33, -0.05, 0.12);
 door.add(knob);
 doorPivot.add(door);
 scene.add(doorPivot);
@@ -1543,4 +1544,5 @@ window.__natume = {
   fallen: () => fallen.map((f) => [f.m.position.x, f.m.position.y, f.m.position.z, f.rest]),
   props: () => ({ mail: mailbox.position.toArray(), sign: signpost.position.toArray(), boat: boat.position.toArray() }),
   quality: () => quality,
+  modelQA: W.modelQA,
 };
