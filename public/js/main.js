@@ -40,7 +40,7 @@ renderer.toneMappingExposure = 1.08;
 $('#app').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xbfe0f5, 48, 168);
+scene.fog = new THREE.Fog(0xbfe0f5, 40, 160);
 
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.3, 1200);
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -398,17 +398,17 @@ const TUFT_COLORS = {
   winter: ['#cfd8cf', '#c2cdc6', '#d8ded6'],
 };
 const TUFT_N = W.tufts.length;
-const tuftMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.075, 0.52, 0.075), new THREE.MeshLambertMaterial(), TUFT_N * 3);
+const tuftMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.1, 0.36, 0.022), new THREE.MeshLambertMaterial(), TUFT_N * 4);
 tuftMesh.frustumCulled = false;
 scene.add(tuftMesh);
-const tuftSeed = new Float32Array(TUFT_N * 3);
+const tuftSeed = new Float32Array(TUFT_N * 4);
 W.tufts.forEach((t, i) => {
-  for (let k = 0; k < 3; k++) {
-    const j = i * 3 + k;
-    const a = t.rot + k * 2.1;
-    dummy.position.set(t.x + Math.cos(a) * 0.1, t.y + 0.22 * t.s, t.z + Math.sin(a) * 0.1);
-    dummy.rotation.set(Math.cos(a) * 0.22, a, Math.sin(a) * 0.18);
-    dummy.scale.set(1, t.s * (0.75 + k * 0.18), 1);
+  for (let k = 0; k < 4; k++) {
+    const j = i * 4 + k;
+    const a = t.rot + k * 1.57;
+    dummy.position.set(t.x + Math.cos(a) * 0.11, t.y + 0.18 * t.s, t.z + Math.sin(a) * 0.11);
+    dummy.rotation.set(Math.cos(a) * 0.3, a, Math.sin(a) * 0.26);
+    dummy.scale.set(1, t.s * (0.7 + k * 0.14), 1);
     dummy.updateMatrix();
     tuftMesh.setMatrixAt(j, dummy.matrix);
     tuftSeed[j] = (t.v + k * 0.37) % 1;
@@ -704,11 +704,11 @@ function applySeason() {
   }
   // 草叶跟着季节换色；冬天被雪盖住就收起来
   const tp = TUFT_COLORS[s] || TUFT_COLORS.summer;
-  for (let j = 0; j < TUFT_N * 3; j++) {
+  for (let j = 0; j < TUFT_N * 4; j++) {
     tuftMesh.setColorAt(j, tmpColor.set(tp[Math.floor(tuftSeed[j] * tp.length)]));
   }
   if (tuftMesh.instanceColor) tuftMesh.instanceColor.needsUpdate = true;
-  tuftMesh.count = s === 'winter' ? 0 : TUFT_N * 3;
+  tuftMesh.count = s === 'winter' ? 0 : TUFT_N * 4;
 
   const shown = Math.round(flowerOrder.length * FLOWER_SHOW[s]);
   petalMesh.count = stemMesh.count = shown;
@@ -761,8 +761,8 @@ function updateSky(hour) {
   skyUniforms.bottom.value.copy(bottom);
   skyUniforms.mid.value.copy(bottom).lerp(top, 0.55);
   scene.fog.color.copy(bottom);
-  scene.fog.near = state.rain ? 30 : 48;
-  scene.fog.far = state.rain ? 120 : 168;
+  scene.fog.near = state.rain ? 28 : 40;
+  scene.fog.far = state.rain ? 112 : 160;
 
   const sunI = 1.8 * smoothstep(-0.03, 0.25, sy);
   const moonI = 0.6 * smoothstep(-0.05, 0.2, -sy);

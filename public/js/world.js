@@ -4,7 +4,7 @@ import * as THREE from 'three';
 export const T = {
   AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, SAND: 4, PATH: 5, LOG: 6, MUD: 7, PLANK: 8,
   THATCH: 9, COBBLE: 10, MLOG: 11, LEAF_A: 12, LEAF_B: 13, LEAF_C: 14, TLOG: 15, TLEAF: 16, WATER: 17,
-  RIDGE: 18, WETSAND: 19, SOIL: 20, CROP: 21,
+  RIDGE: 18, WETSAND: 19, SOIL: 20, CROP: 21, SCREE: 22,
 };
 
 // 细分倍数：1 个原方块 = V^3 个小方块，世界尺寸不变。
@@ -91,11 +91,19 @@ function baseHeight(x, z) {
   const d = Math.hypot(x, z);
   let h = 0;
   const hills = fbm(x * 0.07 + 31, z * 0.07 - 17);
-  h += Math.max(0, hills - 0.5) * 9 * smoothstep(13, 22, d);
-  if (d > 22) {
+  h += Math.max(0, hills - 0.5) * 9 * smoothstep(16, 26, d);
+  if (d > 26) {
     const m = fbm(x * 0.05 + 7, z * 0.05 + 3);
     const ridge = 1 - Math.abs(fbm(x * 0.09 - 5, z * 0.09 + 9) * 2 - 1);
-    h += (d - 22) * (0.3 + m * 0.55) + ridge * 6 * smoothstep(22, 34, d);
+    h += (d - 26) * (0.18 + m * 0.34) + ridge * 4 * smoothstep(26, 40, d);
+  }
+  // 几座明确的远山：给远景主峰，而不是一圈均匀的碗边
+  const peaks = [[-30, -36, 28, 13], [20, -40, 32, 14], [38, 10, 22, 11], [-38, 14, 20, 11]];
+  for (const [px, pz, ph, pr] of peaks) {
+    const dd = Math.hypot(x - px, z - pz);
+    if (dd > pr * 2.4) continue;
+    const bump = Math.exp(-(dd * dd) / (pr * pr));
+    h += ph * bump * (0.82 + 0.36 * fbm(x * 0.11 + px, z * 0.11 + pz));
   }
   return h;
 }
@@ -152,7 +160,10 @@ export function generateWorld() {
         minN = Math.min(minN, n === -99 ? YMIN : n);
       }
       const steep = h - minN >= 3 * V && h > 4 * V;
-      const rocky = h > (13 + fbm(xw * 0.2, zw * 0.2) * 8) * V;
+      const rocky = h > (11 + fbm(xw * 0.2, zw * 0.2) * 7) * V || h > 26 * V;
+      // 山脚碎石带：坡刚起来、高度还不高的一圈，露出碎石和裸土
+      const foot = !river && h > 0 && h <= 5 * V && (h - minN) >= 1.5 * V
+        && fbm(xw * 0.42 + 6, zw * 0.42 - 3) > 0.4;
       for (let yb = YMIN + 1; yb <= h; yb++) {
         const depth = h - yb;
         let t;
@@ -161,6 +172,7 @@ export function generateWorld() {
           else if (isPath(xw, zw)) t = T.PATH;
           else if (h <= 0 && rd < RIVER_HALF + 1.3) t = rd < RIVER_HALF + 0.55 ? T.WETSAND : T.SAND;
           else if (steep || rocky) t = T.STONE;
+          else if (foot) t = T.SCREE;
           else t = T.GRASS;
         // 草层保持约 1 个世界单位厚：台阶侧壁才不会被土色切成一圈圈横纹
         } else if (!steep && !rocky && depth < V) t = river ? T.SAND : T.GRASS;
@@ -260,6 +272,17 @@ export function generateWorld() {
     if (Math.abs(zw - riverZ(xw)) < RIVER_HALF + 1.2) continue;
     if (isPath(xw, zw)) continue;
     boulder(xw, zw, 0.45 + rng() * 1.15);
+  }
+
+  // ---- 山脚乱石：沿坡起的一圈摆，强化平原与山坡的交界 ----
+  for (let i = 0; i < 30; i++) {
+    const a = rng() * Math.PI * 2, r = 18 + rng() * 9;
+    const xw = Math.cos(a) * r, zw = Math.sin(a) * r;
+    const xb = Math.round(xw * V), zb = Math.round(zw * V);
+    const h = getH(xb, zb);
+    if (h < 1 || h > 7 * V) continue;
+    if (rectDist(HUT_ZONE, xw, zw) < 3 || rectDist(TREE_ZONE, xw, zw) < 3) continue;
+    boulder(xw, zw, 0.45 + rng() * 1.0);
   }
 
   // ---- 河里的踏脚石 ----
@@ -593,11 +616,12 @@ export function generateWorld() {
     }
   };
   // 主干：细一点、带一点倾斜
-  limb(tbx, 0, tbz, tbx + W3(0.3), W3(3.4), tbz + W3(0.1), 1.0, 0.7);
+  limb(tbx, 0, tbz, tbx + W3(0.22), W3(1.9), tbz + W3(0.08), 1.9, 1.5);
+  limb(tbx + W3(0.22), W3(1.75), tbz + W3(0.08), tbx + W3(0.42), W3(3.5), tbz + W3(0.16), 1.5, 1.15);
   // 三条主枝
-  limb(tbx + W3(0.3), W3(2.9), tbz + W3(0.1), tbx - W3(1.4), W3(6.2), tbz + W3(0.9), 1.0, 0.7);
-  limb(tbx + W3(0.3), W3(3.1), tbz + W3(0.1), tbx + W3(1.5), W3(6.4), tbz - W3(1.0), 1.0, 0.7);
-  limb(tbx + W3(0.3), W3(3.2), tbz + W3(0.1), tbx + W3(0.2), W3(6.6), tbz + W3(1.5), 1.0, 0.7);
+  limb(tbx + W3(0.3), W3(2.9), tbz + W3(0.1), tbx - W3(1.4), W3(6.2), tbz + W3(0.9), 1.25, 0.8);
+  limb(tbx + W3(0.3), W3(3.1), tbz + W3(0.1), tbx + W3(1.5), W3(6.4), tbz - W3(1.0), 1.25, 0.8);
+  limb(tbx + W3(0.3), W3(3.2), tbz + W3(0.1), tbx + W3(0.2), W3(6.6), tbz + W3(1.5), 1.25, 0.8);
   // 二级小枝
   limb(tbx - W3(1.4), W3(6.2), tbz + W3(0.9), tbx - W3(2.4), W3(7.2), tbz + W3(1.8), 0.7, 0.5);
   limb(tbx + W3(1.5), W3(6.4), tbz - W3(1.0), tbx + W3(2.5), W3(7.4), tbz - W3(1.8), 0.7, 0.5);
@@ -756,6 +780,7 @@ function tileFor(t, dir) {
     case T.PATH: return TILE_ID.GRAVEL;
     case T.WETSAND: return TILE_ID.GRAVEL;
     case T.SOIL: return TILE_ID.GRAVEL;
+    case T.SCREE: return TILE_ID.GRAVEL;
     case T.CROP: return TILE_ID.LEAF;
     case T.LOG: case T.MLOG: case T.TLOG: return top ? TILE_ID.LOGTOP : TILE_ID.LOG;
     case T.MUD: return TILE_ID.MUD;
@@ -777,7 +802,7 @@ const PALETTE = {
 const FIXED = {
   dirt: C('#8e6a4e'), stone: C('#a09a8c'), sand: C('#ddcba0'), path: C('#b3a68c'), log: C('#7a5c42'), logTop: C('#a88a63'),
   mud: C('#f0e6cf'), plank: C('#c09a6b'), cobble: C('#9a927f'), mlog: C('#6d5238'), tlog: C('#82684c'), tlogTop: C('#94765a'),
-  snow: C('#f2f6fa'), autumnYellow: C('#e8c23a'), wetsand: C('#b8a078'), soil: C('#96755c'),
+  snow: C('#f2f6fa'), autumnYellow: C('#e8c23a'), wetsand: C('#b8a078'), soil: C('#96755c'), scree: C('#a39684'),
 };
 const SNOW_LINE = { spring: 25, summer: 99, autumn: 27, winter: -99 };
 
@@ -794,6 +819,7 @@ function faceColor(t, dir, y, v, season, out) {
     case T.SAND: out.copy(FIXED.sand); break;
     case T.WETSAND: out.copy(FIXED.wetsand); break;
     case T.SOIL: out.copy(FIXED.soil); break;
+    case T.SCREE: out.copy(FIXED.scree); break;
     case T.CROP: out.copy(p.crop); if (season === 'winter') out.lerp(FIXED.snow, 0.25); break;
     case T.PATH: out.copy(FIXED.path); break;
     case T.LOG: out.copy(dir === 2 || dir === 3 ? FIXED.logTop : FIXED.log); break;
@@ -812,7 +838,7 @@ function faceColor(t, dir, y, v, season, out) {
   }
   // 方块越小，逐块明暗差越要收敛，否则整片地形会变成噪点
   // 地表不做逐块色差：方块只有 4-8 像素时，这点差异会织成一层布纹
-  const k = (t === T.GRASS || t === T.DIRT || t === T.STONE || t === T.SAND || t === T.PATH || t === T.WETSAND || t === T.SOIL || t === T.CROP) ? 1 : 0.975 + v * 0.05;
+  const k = (t === T.GRASS || t === T.DIRT || t === T.STONE || t === T.SAND || t === T.PATH || t === T.WETSAND || t === T.SOIL || t === T.CROP || t === T.SCREE) ? 1 : 0.975 + v * 0.05;
   out.r *= k; out.g *= k; out.b *= k;
   return out;
 }
@@ -836,7 +862,7 @@ const WATER_DROP = 0.22;
 // 地表类：坡面是台阶拼出来的，一旦逐面加 AO/朝向差就会连成棋盘格。
 // 让它们保持纯色（只有大尺度 tint），体积感交给建筑与树。
 const isGround = (t) => t === T.GRASS || t === T.DIRT || t === T.STONE || t === T.SAND
-  || t === T.PATH || t === T.WETSAND || t === T.SOIL || t === T.CROP;
+  || t === T.PATH || t === T.WETSAND || t === T.SOIL || t === T.CROP || t === T.SCREE;
 
 /**
  * 把网格里满足 filter 的方块转成一个 BufferGeometry（只生成外露的面，带顶点环境光遮蔽）。
