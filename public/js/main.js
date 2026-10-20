@@ -40,7 +40,7 @@ renderer.toneMappingExposure = 1.08;
 $('#app').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xbfe0f5, 62, 210);
+scene.fog = new THREE.Fog(0xbfe0f5, 54, 185);
 
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.3, 1200);
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -61,13 +61,13 @@ controls.addEventListener('start', () => { controls.autoRotate = false; hideHint
 function fitCamera() {
   const a = innerWidth / innerHeight;
   camera.aspect = a;
-  camera.fov = a < 0.8 ? 64 : a < 1.2 ? 56 : 50;
+  camera.fov = a < 0.8 ? 60 : a < 1.2 ? 53 : 46;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 }
 {
   const a = innerWidth / innerHeight;
-  const dist = a < 0.8 ? 40 : 36;
+  const dist = a < 0.8 ? 37 : 33;
   const az = 0.62, pol = 1.28;
   camera.position.set(
     controls.target.x + dist * Math.sin(pol) * Math.sin(az),
@@ -700,7 +700,7 @@ function applyWeather() {
 
 // ---------- 昼夜 ----------
 const COL = {
-  dayTop: new THREE.Color('#4f9be0'), dayBottom: new THREE.Color('#c4e3f6'),
+  dayTop: new THREE.Color('#78b0dc'), dayBottom: new THREE.Color('#e6f0f6'),
   nightTop: new THREE.Color('#070d24'), nightBottom: new THREE.Color('#1a2448'),
   dusk: new THREE.Color('#ff9d63'), duskTop: new THREE.Color('#5d63ad'),
   rainDay: new THREE.Color('#8d97a3'), rainNight: new THREE.Color('#1d222b'),
@@ -732,10 +732,10 @@ function updateSky(hour) {
   skyUniforms.bottom.value.copy(bottom);
   skyUniforms.mid.value.copy(bottom).lerp(top, 0.55);
   scene.fog.color.copy(bottom);
-  scene.fog.near = state.rain ? 40 : 70;
-  scene.fog.far = state.rain ? 150 : 230;
+  scene.fog.near = state.rain ? 34 : 54;
+  scene.fog.far = state.rain ? 132 : 185;
 
-  const sunI = 2.7 * smoothstep(-0.03, 0.25, sy);
+  const sunI = 2.3 * smoothstep(-0.03, 0.25, sy);
   const moonI = 0.6 * smoothstep(-0.05, 0.2, -sy);
   const isSun = sunI >= moonI;
   const lightDir = isSun ? sunDir : moonDir.copy(sunDir).negate();
@@ -745,9 +745,9 @@ function updateSky(hour) {
   hemi.color.copy(top);
   // 地面反弹光偏草色，方块减半后竖直面太多，原来的土褐色会把整片山坡刷成横纹
   hemi.groundColor.set(0x7d8462);
-  hemi.intensity = (0.4 + 0.8 * day) * (state.rain ? 0.8 : 1);
+  hemi.intensity = (0.52 + 0.72 * day) * (state.rain ? 0.8 : 1);
   // 阴影里留一点底光，不然墙面在低角度太阳下会糊成一片黑
-  ambient.intensity = 0.16 + 0.44 * (1 - day) + 0.45 * dusk;
+  ambient.intensity = 0.19 + 0.42 * (1 - day) + 0.45 * dusk;
   // 白天补光偏暖：草泥墙在影子里别被天光染成蓝灰
   ambient.color.copy(COL.ambDay).lerp(COL.ambNight, 1 - day);
 

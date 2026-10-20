@@ -4,7 +4,7 @@ import * as THREE from 'three';
 export const T = {
   AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, SAND: 4, PATH: 5, LOG: 6, MUD: 7, PLANK: 8,
   THATCH: 9, COBBLE: 10, MLOG: 11, LEAF_A: 12, LEAF_B: 13, LEAF_C: 14, TLOG: 15, TLEAF: 16, WATER: 17,
-  RIDGE: 18, WETSAND: 19,
+  RIDGE: 18, WETSAND: 19, SOIL: 20, CROP: 21,
 };
 
 // 细分倍数：1 个原方块 = V^3 个小方块，世界尺寸不变。
@@ -31,6 +31,9 @@ const HUT_ZONE = { x0: -15, x1: -3, z0: -14, z1: -5 };
 export const TREE = { x: 6, z: -3 };
 const TREE_ZONE = { x0: 0, x1: 12, z0: -9, z1: 2 };
 const PATH_X0 = -10, PATH_X1 = -8;
+// 农田：在枣树右侧的一块平地
+export const FIELD = { x0: 9.6, x1: 15.4, z0: -8, z1: -2.6 };
+const FIELD_ZONE = { x0: 8.2, x1: 17, z0: -9.5, z1: -1.2 };
 
 // ---------- 噪声与随机 ----------
 function hash2(x, z) {
@@ -102,7 +105,7 @@ function heightAtBlock(xb, zb) {
   const xw = xb / V, zw = zb / V;
   const rd = Math.abs(zw - riverZ(xw));
   if (rd < RIVER_HALF) return -V;
-  const flat = Math.min(rectDist(HUT_ZONE, xw, zw), rectDist(TREE_ZONE, xw, zw));
+  const flat = Math.min(rectDist(HUT_ZONE, xw, zw), rectDist(TREE_ZONE, xw, zw), rectDist(FIELD_ZONE, xw, zw));
   let hw = baseHeight(xw, zw) * smoothstep(0, 7, flat);
   const valley = (rd - RIVER_HALF) * 1.15;
   if (hw > valley) hw = Math.max(0, valley);
@@ -169,6 +172,59 @@ export function generateWorld() {
     }
   }
 
+  // ---- 农田：翻土成垄，隔一垄种一垄 ----
+  const fx0 = Math.round(FIELD.x0 * V), fx1 = Math.round(FIELD.x1 * V);
+  const fz0 = Math.round(FIELD.z0 * V), fz1 = Math.round(FIELD.z1 * V);
+  for (let xb = fx0; xb <= fx1; xb++) {
+    for (let zb = fz0; zb <= fz1; zb++) {
+      const h = getH(xb, zb);
+      if (h < 0) continue;
+      grid.set(xb, h, zb, T.SOIL);
+      const row = Math.floor((zb - fz0) / V) % 2;
+      if (row === 0) {
+        const tall = hash3(xb, 3, zb) > 0.45 ? 2 : 1;
+        for (let k = 1; k <= tall; k++) grid.set(xb, h + k, zb, T.CROP);
+      }
+    }
+  }
+  // 木栅栏：两条长边立柱 + 横杆
+  const fencePost = (xb, zb) => {
+    const h = getH(xb, zb);
+    if (h < 0) return h;
+    for (let k = 1; k <= 3; k++) grid.set(xb, h + k, zb, T.MLOG);
+    return h;
+  };
+  for (let xb = fx0 - 1; xb <= fx1 + 1; xb++) {
+    for (const zEdge of [fz0 - 1, fz1 + 1]) {
+      const atPost = (xb - fx0) % 4 === 0;
+      const h = getH(xb, zEdge);
+      if (h < 0) continue;
+      if (atPost) fencePost(xb, zEdge);
+      else if (!grid.get(xb, h + 2, zEdge)) grid.set(xb, h + 2, zEdge, T.MLOG);
+    }
+  }
+  // 稻草人：立在田角
+  {
+    const sx = fx1 - 2, sz = fz0 + 2;
+    const h = getH(sx, sz);
+    if (h >= 0) {
+      for (let k = 1; k <= 4; k++) grid.set(sx, h + k, sz, T.MLOG);
+      for (let dx = -1; dx <= 1; dx++) grid.set(sx + dx, h + 3, sz, T.MLOG);
+      grid.set(sx, h + 5, sz, T.MUD);          // 布头
+      grid.set(sx, h + 6, sz, T.THATCH);       // 草帽
+    }
+  }
+  // 草垛
+  {
+    const hx = fx0 + 2, hz = fz1 - 2;
+    const h = getH(hx, hz);
+    if (h >= 0) {
+      for (let dx = 0; dx <= 1; dx++) for (let dz = 0; dz <= 1; dz++) for (let k = 1; k <= 2; k++)
+        grid.set(hx + dx, h + k, hz + dz, T.THATCH);
+      grid.set(hx, h + 3, hz, T.THATCH);
+    }
+  }
+
   // ---- 路上和小路边缘的碎石（让路面不至于像一条贴图带）----
   for (let z = Math.floor(HUT.z1); z <= pathZ1; z++) {
     for (const x of [PATH_X0 - 1, PATH_X1 + 1]) {
@@ -197,7 +253,7 @@ export function generateWorld() {
       }
     }
   };
-  for (let i = 0; i < 44; i++) {
+  for (let i = 0; i < 24; i++) {
     const a = rng() * Math.PI * 2, r = 9 + rng() * 30;
     const xw = Math.cos(a) * r, zw = Math.sin(a) * r;
     if (rectDist(HUT_ZONE, xw, zw) < 2.6 || rectDist(TREE_ZONE, xw, zw) < 2.6) continue;
@@ -220,7 +276,7 @@ export function generateWorld() {
 
   // ---- 杂草：成片的长草（位置导出，main.js 用实例化画）----
   const tufts = [];
-  for (let i = 0; i < 5200 && tufts.length < 1050; i++) {
+  for (let i = 0; i < 4200 && tufts.length < 820; i++) {
     const a = rng() * Math.PI * 2, r = 3.5 + Math.sqrt(rng()) * 19;
     const xw = Math.cos(a) * r, zw = Math.sin(a) * r;
     if (fbm(xw * 0.32 + 2, zw * 0.32 - 5) < 0.4) continue;
@@ -293,7 +349,7 @@ export function generateWorld() {
     }
   }
 
-  for (const site of sites.slice(0, 46)) {
+  for (const site of sites.slice(0, 34)) {
     const { xb, zb, h } = site;
     const kind = rng();
     const pine = site.alt > 13 || (site.alt > 9 && kind < 0.45);
@@ -346,7 +402,7 @@ export function generateWorld() {
     if (grid.get(xb, h, zb) !== T.GRASS) return null;
     return { xb, zb, h, xw, zw };
   };
-  for (let i = 0, n = 0; i < 90 && n < 16; i++) {
+  for (let i = 0, n = 0; i < 70 && n < 9; i++) {
     const spot = meadowSpot(8, 21, 2.2);
     if (!spot) continue;
     n++;
@@ -657,6 +713,8 @@ function tileFor(t, dir) {
     case T.STONE: case T.COBBLE: return TILE_ID.STONE;
     case T.PATH: return TILE_ID.GRAVEL;
     case T.WETSAND: return TILE_ID.GRAVEL;
+    case T.SOIL: return TILE_ID.GRAVEL;
+    case T.CROP: return TILE_ID.LEAF;
     case T.LOG: case T.MLOG: case T.TLOG: return top ? TILE_ID.LOGTOP : TILE_ID.LOG;
     case T.MUD: return TILE_ID.MUD;
     case T.PLANK: return TILE_ID.PLANK;
@@ -669,15 +727,15 @@ function tileFor(t, dir) {
 // ---------- 季节配色 ----------
 const C = (hex) => new THREE.Color(hex);
 const PALETTE = {
-  spring: { grass: C('#7fd35b'), leafA: C('#8fd46a'), leafB: C('#a3df7c'), leafC: C('#4f9a46'), tleaf: C('#94d466'), thatch: C('#d8ad5a') },
-  summer: { grass: C('#5cae3c'), leafA: C('#3f8a3a'), leafB: C('#4d9a42'), leafC: C('#2f7034'), tleaf: C('#4f9d3e'), thatch: C('#d6a852') },
-  autumn: { grass: C('#a7a84c'), leafA: C('#e08a2c'), leafB: C('#c8442c'), leafC: C('#3a7a3c'), tleaf: C('#a6b842'), thatch: C('#c99b4a') },
-  winter: { grass: C('#eef3f7'), leafA: C('#7a6a55'), leafB: C('#7a6a55'), leafC: C('#2f5f3c'), tleaf: C('#7a6a55'), thatch: C('#bf9a55') },
+  spring: { grass: C('#9ed682'), leafA: C('#a4d789'), leafB: C('#b9e2a2'), leafC: C('#6ba268'), tleaf: C('#a8d98a'), thatch: C('#dcc08a'), crop: C('#93c76b') },
+  summer: { grass: C('#7cbb66'), leafA: C('#5d9a55'), leafB: C('#6da85f'), leafC: C('#477f4e'), tleaf: C('#74b063'), thatch: C('#d6b57c'), crop: C('#a8bd5e') },
+  autumn: { grass: C('#c3bb7a'), leafA: C('#d99a52'), leafB: C('#c47a4b'), leafC: C('#568a55'), tleaf: C('#c2a45a'), thatch: C('#cfa76a'), crop: C('#d9b45c') },
+  winter: { grass: C('#eef3f7'), leafA: C('#8a7a63'), leafB: C('#8a7a63'), leafC: C('#4a7050'), tleaf: C('#8a7a63'), thatch: C('#c2a06a'), crop: C('#bdaa86') },
 };
 const FIXED = {
-  dirt: C('#8a5d3b'), stone: C('#948c7e'), sand: C('#d9c592'), path: C('#ab9c80'), log: C('#6b4a2e'), logTop: C('#9c7a52'),
-  mud: C('#ece0c6'), plank: C('#b98a53'), cobble: C('#8b8172'), mlog: C('#5e4128'), tlog: C('#7b5a3f'), tlogTop: C('#8c6742'),
-  snow: C('#f2f6fa'), autumnYellow: C('#e8c23a'), wetsand: C('#b0925f'),
+  dirt: C('#8e6a4e'), stone: C('#a09a8c'), sand: C('#ddcba0'), path: C('#b3a68c'), log: C('#7a5c42'), logTop: C('#a88a63'),
+  mud: C('#f0e6cf'), plank: C('#c09a6b'), cobble: C('#9a927f'), mlog: C('#6d5238'), tlog: C('#82684c'), tlogTop: C('#94765a'),
+  snow: C('#f2f6fa'), autumnYellow: C('#e8c23a'), wetsand: C('#b8a078'), soil: C('#8a6a52'),
 };
 const SNOW_LINE = { spring: 25, summer: 99, autumn: 27, winter: -99 };
 
@@ -693,6 +751,8 @@ function faceColor(t, dir, y, v, season, out) {
     case T.STONE: out.copy(FIXED.stone); break;
     case T.SAND: out.copy(FIXED.sand); break;
     case T.WETSAND: out.copy(FIXED.wetsand); break;
+    case T.SOIL: out.copy(FIXED.soil); break;
+    case T.CROP: out.copy(p.crop); if (season === 'winter') out.lerp(FIXED.snow, 0.25); break;
     case T.PATH: out.copy(FIXED.path); break;
     case T.LOG: out.copy(dir === 2 || dir === 3 ? FIXED.logTop : FIXED.log); break;
     case T.MUD: out.copy(FIXED.mud); break;
