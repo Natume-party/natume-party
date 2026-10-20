@@ -989,7 +989,7 @@ const isGround = (t) => t === T.GRASS || t === T.DIRT || t === T.STONE || t === 
  * 把网格里满足 filter 的方块转成一个 BufferGeometry（只生成外露的面，带顶点环境光遮蔽）。
  * 返回 { geometry, recolor(season) }。
  */
-export function buildMesh(grid, filter, origin = [0, 0, 0]) {
+export function buildMesh(grid, filter, origin = [0, 0, 0], skipFarTerrain = false) {
   const pos = [], nor = [], uv = [], col = [], idx = [];
   const meta = []; // 每个面：type, dir, y, v, ao0..ao3
   let vcount = 0;
@@ -1000,6 +1000,7 @@ export function buildMesh(grid, filter, origin = [0, 0, 0]) {
       for (let z = -O; z <= O; z++) {
         const t = d[base + z + O];
         if (!t || !filter(t)) continue;
+        if (skipFarTerrain && isGround(t) && isDistantSlopeColumn(x,z)) continue;
         const v = hash3(x, y, z);
         for (let f = 0; f < 6; f++) {
           const dir = DIRS[f];
@@ -1072,6 +1073,68 @@ export function buildMesh(grid, filter, origin = [0, 0, 0]) {
     colorAttr.needsUpdate = true;
   }
   return { geometry, recolor, faces: meta.length / 9 };
+}
+
+
+// 远景坡面 LOD：只替换小屋后方的北向山地表层。
+// 地形格与 W.getH 的整数体素高度不变，因此现有树、建筑、碰撞仍使用原来的坐标。
+// 边界处保留半格体素过渡，避免与前景/河岸的规则混用。
+const LOD_NORTH_EDGE = -23 * V;
+export function isDistantSlopeColumn(x, z) {
+  return z <= LOD_NORTH_EDGE && x * x + z * z > (26 * V) ** 2
+    && x * x + z * z < (R * V) ** 2;
+}
+
+export function buildDistantSlopeLOD({ grid, getH }) {
+  const positions = [], colors = [], indices = [], shades = [];
+  const step = 2; // 比原始体素面更稀疏；每两个小方格共享三角形坡面
+  const yAt = (x, z) => getH(x / V, z / V) + 0.5 / V;
+  // Surface samples retain exact height at their sample locations. Objects and
+  // collisions remain attached to the untouched underlying voxel world.
+  const verts = new Map();
+  const vertex = (x, z) => {
+    const key = x + ':' + z;
+    if (verts.has(key)) return verts.get(key);
+    const y = yAt(x, z);
+    const idx = positions.length / 3;
+    positions.push(x / V, y + 0.016, z / V);
+    colors.push(1, 1, 1);
+    const h = Math.round(getH(x / V, z / V) * V);
+    const material = grid.get(x, h, z);
+    shades.push(material === T.STONE || material === T.SCREE ? material : T.GRASS,
+      h, hash3(x, h, z), fbm(x * 0.028 + 11, z * 0.028 - 4));
+    verts.set(key, idx);
+    return idx;
+  };
+  const min = -R * V, max = R * V;
+  for (let x = min; x + step <= max; x += step) {
+    for (let z = min; z + step <= LOD_NORTH_EDGE; z += step) {
+      const corners = [[x,z],[x+step,z],[x+step,z+step],[x,z+step]];
+      if (!corners.every(([cx,cz]) => isDistantSlopeColumn(cx,cz))) continue;
+      const [a,b,c,d] = corners.map(([cx,cz]) => vertex(cx,cz));
+      // CCW winding when viewed from above.
+      indices.push(a,c,b, a,d,c);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  const colorAttr = new THREE.Float32BufferAttribute(colors,3);
+  geometry.setAttribute('color',colorAttr);
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  const color = new THREE.Color();
+  function recolor(season) {
+    const out = colorAttr.array;
+    for (let i=0; i<shades.length; i+=4) {
+      const [t,h,v,tint] = shades.slice(i,i+4);
+      faceColor(t,2,h,v,season,color,tint);
+      const p=i / 4 * 3;
+      out[p]=color.r;out[p+1]=color.g;out[p+2]=color.b;
+    }
+    colorAttr.needsUpdate=true;
+  }
+  return {geometry,recolor,faces:indices.length/3};
 }
 
 export const filters = {
