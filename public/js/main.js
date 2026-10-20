@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from '../vendor/OrbitControls.js';
 import {
-  generateWorld, buildMesh, filters, makeAtlas, TILE_ID, ATLAS, TREE, fbm, smoothstep, hash3, riverZ, V,
+  generateWorld, buildMesh, buildDistantSlopeLOD, filters, makeAtlas, TILE_ID, ATLAS, TREE, fbm, smoothstep, hash3, riverZ, V,
 } from './world.js';
 import { Ambience } from './audio.js';
 import { initHut } from './hut.js';
@@ -67,8 +67,12 @@ function fitCamera() {
 }
 {
   const a = innerWidth / innerHeight;
-  const dist = a < 0.8 ? 37 : 33;
-  const az = 0.62, pol = 1.34;
+  // V3.1 手机竖屏：默认稍微俯视、适度拉远，同时照顾小桥、小屋和枣树。
+  // 保持桌面原取景，不改变用户旋转/缩放后的 OrbitControls 操作。
+  const portraitTouch = isTouch && a < 0.8;
+  if (portraitTouch) controls.target.set(-2, 3, -2);
+  const dist = portraitTouch ? 44 : a < 0.8 ? 37 : 33;
+  const az = 0.62, pol = portraitTouch ? 1.18 : 1.34;
   camera.position.set(
     controls.target.x + dist * Math.sin(pol) * Math.sin(az),
     controls.target.y + dist * Math.cos(pol),
@@ -107,12 +111,23 @@ const tileTexture = (tile) => {
 const blockMat = new THREE.MeshLambertMaterial({ map: atlas, vertexColors: true });
 
 const W = generateWorld();
-const world = buildMesh(W.grid, filters.world);
+// Isolated preview A/B switch for measured LOD-vs-original comparisons.
+// ?lod=off reconstructs the original terrain geometry without touching W.grid.
+const useDistantLOD = params.get('lod') !== 'off';
+const world = buildMesh(W.grid, filters.world, [0,0,0], useDistantLOD);
 const worldMesh = new THREE.Mesh(world.geometry, blockMat);
 worldMesh.castShadow = worldMesh.receiveShadow = true;
 // 网格按细分倍数缩小回世界尺度：方块更细，世界范围不变
 worldMesh.scale.setScalar(1 / V);
 scene.add(worldMesh);
+const distantSlope = useDistantLOD ? buildDistantSlopeLOD(W) : null;
+if (distantSlope) {
+  const distantSlopeMesh = new THREE.Mesh(distantSlope.geometry,
+    new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+  distantSlopeMesh.receiveShadow = true;
+  distantSlopeMesh.castShadow = false;
+  scene.add(distantSlopeMesh);
+}
 
 // 水面：单独的半透明材质，纹理滚动表现水流
 const waterTex = (() => {
@@ -239,21 +254,29 @@ const porchLight = new THREE.PointLight(0xffc46b, 0, 22, 1.6);
 porchLight.position.set(W.door.x - 0.5, 2.6, W.door.z + 2);
 scene.add(porchLight);
 
-// ---------- 小桥：拱桥，桥下要给纸船留出净空 ----------
+// ---------- 小桥 V3.1：紧凑木拱桥，连续扶手与两侧承重梁 ----------
+// 所有部件沿 deckY 的切线倾斜，避免弧形桥被画成一排松散水平短棍。
+// 仅在桥侧增加梁，中央桥下仍给纸船的桅杆留出净空。
 {
   const b = W.bridge;
-  const mat = new THREE.MeshLambertMaterial({ map: plankTex, color: 0xc0915a });
+  const mat = new THREE.MeshLambertMaterial({ map: plankTex, color: 0xb98c5c });
   const cols = Math.round(b.x1 - b.x0), rows = Math.round(b.z1 - b.z0);
-  // 拱高按纸船定：桅顶在 1.0 上下，桥面下沿最薄处也要高过它
   const rowsAll = rows + 2;
   const zc = (b.z0 + b.z1) / 2;
   const zAt = (j) => zc + (j - (rowsAll - 1) / 2);
   const deckY = (j) => 0.3 + 1.12 * Math.sin(Math.PI * (j / (rowsAll - 1)));
-  const planks = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.26, 0.92), mat, cols * rowsAll);
+  const slopeAt = (j) => {
+    const before = Math.max(0, j - 1), after = Math.min(rowsAll - 1, j + 1);
+    return Math.atan2(deckY(after) - deckY(before), zAt(after) - zAt(before));
+  };
+  // 原板深 0.92、中心间距 1，会露出明显纵向缝隙；改为小幅交叠的贴合板。
+  // 木板随拱线调整坡度，仍留横向细纹而不是做成整块塑料平台。
+  const planks = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(0.985, 0.24, 1.035), mat, cols * rowsAll);
   let n = 0;
   for (let i = 0; i < cols; i++) for (let j = 0; j < rowsAll; j++) {
     dummy.position.set(b.x0 + 0.5 + i, deckY(j), zAt(j));
-    dummy.rotation.set(0, 0, 0);
+    dummy.rotation.set(-slopeAt(j), 0, 0);
     dummy.scale.set(1, 1, 1);
     dummy.updateMatrix();
     planks.setMatrixAt(n++, dummy.matrix);
@@ -261,36 +284,57 @@ scene.add(porchLight);
   planks.castShadow = planks.receiveShadow = true;
   scene.add(planks);
 
-  const postMat = new THREE.MeshLambertMaterial({ map: tileTexture(TILE_ID.LOG), color: 0x6b4a2e });
-  const RAIL_H = 0.78;
-  const rails = new THREE.InstancedMesh(new THREE.BoxGeometry(0.12, 0.13, 1.02), postMat, 2 * rowsAll);
-  const balusters = [];
-  let rn = 0;
-  for (const x of [b.x0 - 0.03, b.x1 + 0.03]) {
-    for (let j = 0; j < rowsAll; j++) {
-      const y = deckY(j), z = zAt(j);
-      dummy.position.set(x, y + RAIL_H, z);
-      dummy.rotation.set(0, 0, 0);
-      dummy.scale.set(1, 1, 1);
+  const woodMat = new THREE.MeshLambertMaterial({
+    map: tileTexture(TILE_ID.LOG), color: 0x775337,
+  });
+  const RAIL_H = 0.82;
+  const spans = rowsAll - 1;
+  // 一根梁沿多段拱线首尾重叠，视觉上是一条完整的木结构。
+  const sideBeams = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(0.19, 0.23, 1), woodMat, 2 * spans);
+  const handrails = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(0.14, 0.14, 1), woodMat, 2 * spans);
+  let railIndex = 0;
+  const posts = [];
+  for (let side = 0; side < 2; side++) {
+    const xRail = side === 0 ? b.x0 - 0.055 : b.x1 + 0.055;
+    const xBeam = side === 0 ? b.x0 + 0.075 : b.x1 - 0.075;
+    for (let j = 0; j < spans; j++) {
+      const y0 = deckY(j), y1 = deckY(j + 1);
+      const z0 = zAt(j), z1 = zAt(j + 1);
+      const slope = Math.atan2(y1 - y0, z1 - z0);
+      const len = Math.hypot(y1 - y0, z1 - z0);
+      dummy.rotation.set(-slope, 0, 0);
+      dummy.scale.set(1, 1, len * 1.045);
+      dummy.position.set(xRail, (y0 + y1) / 2 + RAIL_H, (z0 + z1) / 2);
       dummy.updateMatrix();
-      rails.setMatrixAt(rn++, dummy.matrix);
-      if (j % 2 === 0) balusters.push([x, y, z]);
+      handrails.setMatrixAt(railIndex, dummy.matrix);
+      dummy.position.set(xBeam, (y0 + y1) / 2 - 0.17, (z0 + z1) / 2);
+      dummy.updateMatrix();
+      sideBeams.setMatrixAt(railIndex, dummy.matrix);
+      railIndex++;
+    }
+    // 两侧每两格一根立柱，并确保桥首尾都有支点。
+    for (let j = 0; j < rowsAll; j++) {
+      if (j % 2 === 0 || j === rowsAll - 1) posts.push([xRail, deckY(j), zAt(j)]);
     }
   }
-  rails.castShadow = true;
-  scene.add(rails);
+  sideBeams.castShadow = handrails.castShadow = true;
+  scene.add(sideBeams, handrails);
 
-  const balMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.16, 1, 0.16), postMat, balusters.length);
-  balusters.forEach(([x, y, z], i) => {
-    const top = y + RAIL_H + 0.1, bot = -0.1;
-    dummy.position.set(x, (top + bot) / 2, z);
+  // 立柱下端只入桥板，旧实现从每根立柱延伸到固定水位，像河里散乱的木桩。
+  const balusters = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(0.15, 1, 0.15), woodMat, posts.length);
+  posts.forEach(([x, y, z], i) => {
+    const bottom = y - 0.12, top = y + RAIL_H + 0.09;
+    dummy.position.set(x, (bottom + top) / 2, z);
     dummy.rotation.set(0, 0, 0);
-    dummy.scale.set(1, top - bot, 1);
+    dummy.scale.set(1, top - bottom, 1);
     dummy.updateMatrix();
-    balMesh.setMatrixAt(i, dummy.matrix);
+    balusters.setMatrixAt(i, dummy.matrix);
   });
-  balMesh.castShadow = true;
-  scene.add(balMesh);
+  balusters.castShadow = true;
+  scene.add(balusters);
 }
 
 
@@ -414,38 +458,47 @@ flowerOrder.forEach((f, i) => {
 });
 scene.add(stemMesh, petalMesh);
 
-// ---------- 杂草与浮萍 ----------
-const GROUND_Y = 0.5 / V;            // 草地方块顶面（世界单位）。之前按 0 放，草叶有一半埋在地下
+// ---------- V3.1 轻薄渐尖草叶：不再用厚盒状模型 ----------
+const GROUND_Y = 0.5 / V;
 const TUFT_COLORS = {
-  spring: ['#69bd47', '#7fcd5b', '#55a93c'],
-  summer: ['#3f8a32', '#4f9a3a', '#377a2c'],
-  autumn: ['#a2953c', '#b7a548', '#8f8534'],
-  winter: ['#cfd8cf', '#c2cdc6', '#d8ded6'],
+  spring: ['#83a977', '#a3be8c', '#729b7b', '#b4be84'],
+  summer: ['#658c62', '#819b75', '#527d65', '#9ca779'],
+  autumn: ['#a19658', '#aea36c', '#8f8b57', '#b0a277'],
+  winter: ['#ced5cc', '#bfcac1', '#d8ddd1', '#bdc5bd'],
 };
+const grassGeo = new THREE.BufferGeometry();
+grassGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+  -0.045,0,0,   0.045,0,0,
+  -0.035,0.12,0.01,  0.035,0.12,0.01,
+  -0.017,0.27,0.048, 0.014,0.27,0.048,
+  0,0.34,0.065,
+], 3));
+grassGeo.setIndex([0,1,2, 1,3,2, 2,3,4, 3,5,4, 4,5,6]);
+grassGeo.computeVertexNormals();
 const TUFT_N = W.tufts.length;
-const BLADES = 5;
-const tuftMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.15, 0.46, 0.03), new THREE.MeshLambertMaterial(), TUFT_N * BLADES);
+const BLADES_MAX = 4;
+const tuftMesh = new THREE.InstancedMesh(grassGeo,
+  new THREE.MeshLambertMaterial({ side: THREE.DoubleSide }), Math.max(1, TUFT_N * BLADES_MAX));
 tuftMesh.frustumCulled = false;
+tuftMesh.castShadow = false;
 scene.add(tuftMesh);
-const tuftSeed = new Float32Array(TUFT_N * BLADES);
-W.tufts.forEach((t, i) => {
-  for (let k = 0; k < BLADES; k++) {
-    const j = i * BLADES + k;
-    const a = t.rot + k * 1.2566;
-    const lean = 0.42 + (k % 2) * 0.16;
-    const hh = 0.46 * t.s * (0.82 + k * 0.09);
-    dummy.position.set(
-      t.x + Math.cos(a) * 0.12,
-      GROUND_Y + hh * 0.5 - 0.03,
-      t.z + Math.sin(a) * 0.12,
-    );
-    dummy.rotation.set(Math.sin(a) * lean, a, -Math.cos(a) * lean);
-    dummy.scale.set(1, hh / 0.46, 1);
+const tuftSeeds = [];
+W.tufts.forEach((t) => {
+  for (let k = 0; k < t.n; k++) {
+    const j = tuftSeeds.length;
+    const a = t.rot + k * (Math.PI * 2 / t.n) + (t.v - 0.5) * 0.15;
+    const height = (0.18 + 0.14 * ((t.v * 3.31 + k * 0.47) % 1)) * t.s;
+    dummy.position.set(t.x + Math.cos(a) * 0.075, GROUND_Y - 0.013,
+      t.z + Math.sin(a) * 0.075);
+    dummy.rotation.set(Math.sin(a) * 0.2, a, -Math.cos(a) * 0.2);
+    dummy.scale.set(0.74 + 0.2 * t.v, height / 0.34, 1);
     dummy.updateMatrix();
     tuftMesh.setMatrixAt(j, dummy.matrix);
-    tuftSeed[j] = (t.v + k * 0.37) % 1;
+    tuftSeeds.push((t.v + k * 0.29) % 1);
   }
 });
+const TUFT_INSTANCE_COUNT = tuftSeeds.length;
+tuftMesh.count = TUFT_INSTANCE_COUNT;
 tuftMesh.instanceMatrix.needsUpdate = true;
 
 const lilyMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.42, 0.04, 0.42), new THREE.MeshLambertMaterial({ color: 0x5f9440 }), Math.max(1, W.lilies.length));
@@ -462,8 +515,8 @@ scene.add(lilyMesh);
 
 
 
-const reedMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.1, 1, 0.04), new THREE.MeshLambertMaterial(), W.reeds.length);
-const cattailMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.17, 0.34, 0.17), new THREE.MeshLambertMaterial({ color: 0x7a5232 }), W.reeds.length);
+const reedMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.065, 1, 0.032), new THREE.MeshLambertMaterial(), W.reeds.length);
+const cattailMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.125, 0.28, 0.125), new THREE.MeshLambertMaterial({ color: 0x7a5232 }), W.reeds.length);
 W.reeds.forEach((r, i) => {
   const lean = 0.1 + r.r * 0.5;
   dummy.rotation.set(Math.sin(r.a) * lean, r.a, -Math.cos(r.a) * lean);
@@ -480,9 +533,55 @@ W.reeds.forEach((r, i) => {
   dummy.updateMatrix();
   cattailMesh.setMatrixAt(i, dummy.matrix);
 });
-cattailMesh.count = Math.round(W.reeds.length * 0.45);
+cattailMesh.count = Math.round(W.reeds.length * 0.33);
 reedMesh.castShadow = true;
 scene.add(reedMesh, cattailMesh);
+
+// ---------- V3.1 坡地独立布景：低矮灌木团和散石 ----------
+const HILL_SHRUB_COLORS = {
+  spring: ['#829f76', '#9bae80', '#71977b', '#a9b78c'],
+  summer: ['#648966', '#7b9670', '#557c69', '#909f71'],
+  autumn: ['#a89563', '#b59b72', '#8a9364', '#b4a16d'],
+  winter: ['#9cabb0', '#aeb8b2', '#b8b5a3', '#859998'],
+};
+const HILL_N = W.hillShrubs.length;
+const hillShrubMesh = new THREE.InstancedMesh(
+  new THREE.BoxGeometry(0.46, 0.27, 0.43),
+  new THREE.MeshLambertMaterial(), Math.max(1, HILL_N * 2));
+hillShrubMesh.castShadow = false;
+hillShrubMesh.receiveShadow = true;
+hillShrubMesh.frustumCulled = false;
+W.hillShrubs.forEach((p, i) => {
+  for (let k = 0; k < 2; k++) {
+    const offset = (k === 0 ? -0.13 : 0.17) * p.size;
+    dummy.position.set(p.x + Math.sin(p.rot) * offset,
+      p.y + (k === 0 ? 0.14 : 0.22) * p.size,
+      p.z + Math.cos(p.rot) * offset);
+    dummy.rotation.set(0, p.rot + k * 0.9, 0);
+    dummy.scale.set(p.size * (k ? 0.67 : 1), p.size * (k ? 0.74 : 1), p.size * (k ? 0.7 : 1));
+    dummy.updateMatrix();
+    hillShrubMesh.setMatrixAt(i * 2 + k, dummy.matrix);
+  }
+});
+hillShrubMesh.count = HILL_N * 2;
+hillShrubMesh.instanceMatrix.needsUpdate = true;
+scene.add(hillShrubMesh);
+const stoneMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.5, 0.18, 0.35),
+  new THREE.MeshLambertMaterial(), Math.max(1, W.hillStones.length));
+const STONE_TINT = ['#9e9b8d', '#b3ab97', '#919c95', '#ada391'];
+W.hillStones.forEach((p, i) => {
+  dummy.position.set(p.x, p.y + 0.055 * p.size, p.z);
+  dummy.rotation.set(0, p.rot, 0);
+  dummy.scale.set(p.size, 0.75 + p.v * 0.6, p.size * (0.8 + p.v * 0.35));
+  dummy.updateMatrix();
+  stoneMesh.setMatrixAt(i, dummy.matrix);
+  stoneMesh.setColorAt(i, new THREE.Color(STONE_TINT[Math.floor(p.v * STONE_TINT.length)]));
+});
+stoneMesh.count = W.hillStones.length;
+stoneMesh.frustumCulled = false;
+stoneMesh.castShadow = false;
+stoneMesh.instanceMatrix.needsUpdate = true;
+scene.add(stoneMesh);
 
 // ---------- 萤火：夜里的草坡上慢慢飘 ----------
 const FIRE_N = 44;
@@ -772,6 +871,7 @@ const WATER_COL = { spring: '#4a8f86', summer: '#3f8279', autumn: '#437a78', win
 function applySeason() {
   const s = state.season;
   world.recolor(s);
+  if (distantSlope) distantSlope.recolor(s);
   trunk.recolor(s);
   leaves.recolor(s);
   leavesMesh.visible = s !== 'winter';
@@ -788,13 +888,25 @@ function applySeason() {
     flowerOrder.forEach((f, i) => petalMesh.setColorAt(i, tmpColor.set(pal[Math.floor(f.c * pal.length)])));
     petalMesh.instanceColor.needsUpdate = true;
   }
+  // 春夏略收曝光，高亮草地不再像荧光板；秋冬维持原有明度。
+  renderer.toneMappingExposure = (s === 'spring' || s === 'summer') ? 1.07 : 1.16;
   // 草叶跟着季节换色；冬天被雪盖住就收起来
   const tp = TUFT_COLORS[s] || TUFT_COLORS.summer;
-  for (let j = 0; j < TUFT_N * BLADES; j++) {
-    tuftMesh.setColorAt(j, tmpColor.set(tp[Math.floor(tuftSeed[j] * tp.length)]));
+  for (let j = 0; j < TUFT_INSTANCE_COUNT; j++) {
+    tuftMesh.setColorAt(j, tmpColor.set(tp[Math.floor(tuftSeeds[j] * tp.length)]));
   }
   if (tuftMesh.instanceColor) tuftMesh.instanceColor.needsUpdate = true;
-  tuftMesh.count = s === 'winter' ? 0 : TUFT_N * BLADES;
+  tuftMesh.count = s === 'winter' ? 0 : TUFT_INSTANCE_COUNT;
+
+  // 山地灌木跟随季节，色调与前景区分，避免四季都用同一抹荧光绿。
+  const hc = HILL_SHRUB_COLORS[s] || HILL_SHRUB_COLORS.summer;
+  W.hillShrubs.forEach((p, i) => {
+    for (let k = 0; k < 2; k++) {
+      const tint = Math.floor(((p.v + k * 0.31) % 1) * hc.length);
+      hillShrubMesh.setColorAt(i * 2 + k, tmpColor.set(hc[tint]));
+    }
+  });
+  if (hillShrubMesh.instanceColor) hillShrubMesh.instanceColor.needsUpdate = true;
 
   const shown = Math.round(flowerOrder.length * FLOWER_SHOW[s]);
   petalMesh.count = stemMesh.count = shown;
@@ -1401,6 +1513,7 @@ if (hut.initial) {
 // 方便调试：在控制台查看
 window.__natume = {
   state, scene, camera, controls, faces: world.faces,
+  lodFaces: distantSlope?.faces ?? 0, lodEnabled: useDistantLOD,
   project(x, y, z) {
     const v = new THREE.Vector3(x, y, z).project(camera);
     return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight];

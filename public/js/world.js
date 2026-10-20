@@ -178,8 +178,8 @@ export function generateWorld() {
           if (river) t = T.SAND;
           else if (isPath(xw, zw)) t = T.PATH;
           // 岸线用噪声推一下：等宽的一条浅色带看着像水泥路缘
-          else if (h <= 0 && rd < RIVER_HALF + 0.5 + fbm(xw * 0.75 + 2, zw * 0.75 - 6) * 0.95) {
-            t = rd < RIVER_HALF + 0.28 + fbm(xw * 1.3, zw * 1.3) * 0.3 ? T.WETSAND : T.SAND;
+          else if (h <= 0 && rd < RIVER_HALF + 0.24 + fbm(xw * 0.75 + 2, zw * 0.75 - 6) * 0.65) {
+            t = rd < RIVER_HALF + 0.11 + fbm(xw * 1.3, zw * 1.3) * 0.25 ? T.WETSAND : T.SAND;
           }
           else if (steep || rocky) t = T.STONE;
           else if (foot) t = T.SCREE;
@@ -317,19 +317,23 @@ export function generateWorld() {
     }
   }
 
-  // ---- 杂草：成片的长草（位置导出，main.js 用实例化画）----
+  // ---- V3.1 草甸：斑块生长，降低粗糙重复的草丛密度 ----
   const tufts = [];
-  for (let i = 0; i < 5200 && tufts.length < 1080; i++) {
-    const a = rng() * Math.PI * 2, r = 3.5 + Math.sqrt(rng()) * 19;
+  for (let i = 0; i < 7600 && tufts.length < 460; i++) {
+    const a = rng() * Math.PI * 2, r = 4.2 + Math.sqrt(rng()) * 23.5;
     const xw = Math.cos(a) * r, zw = Math.sin(a) * r;
-    if (fbm(xw * 0.32 + 2, zw * 0.32 - 5) < 0.4) continue;
+    const patch = fbm(xw * 0.19 + 2, zw * 0.19 - 5);
+    if (patch < 0.51 || rng() > 0.48 + (patch - 0.51) * 1.5) continue;
     const xb = Math.round(xw * V), zb = Math.round(zw * V);
     const h = getH(xb, zb);
     if (h !== 0 || grid.get(xb, 0, zb) !== T.GRASS || grid.get(xb, 1, zb)) continue;
-    if (Math.abs(zw - riverZ(xw)) < RIVER_HALF + 0.7) continue;
-    if (isPath(xw, zw)) continue;
-    if (rectDist(HUT_ZONE, xw, zw) < 0.7 || rectDist(TREE_ZONE, xw, zw) < 0.9) continue;
-    tufts.push({ x: xw, z: zw, y: h / V, s: 0.65 + rng() * 0.7, rot: rng() * 3.14, v: rng() });
+    const rd = Math.abs(zw - riverZ(xw));
+    if (rd < RIVER_HALF + 1.5 || isPath(xw, zw)) continue;
+    if (rectDist(HUT_ZONE, xw, zw) < 1.8 || rectDist(TREE_ZONE, xw, zw) < 1.65) continue;
+    // 桥边留出轮廓清晰的步道
+    if (xw > PATH_X0 - 3 && xw < PATH_X1 + 3 && rd < RIVER_HALF + 5) continue;
+    tufts.push({ x: xw, z: zw, y: h / V, s: 0.69 + rng() * 0.48,
+      rot: rng() * Math.PI * 2, v: rng(), n: 2 + Math.floor(rng() * 3) });
   }
 
   // ---- 河岸：浮萍 + 倒木 ----
@@ -394,7 +398,23 @@ export function generateWorld() {
     }
   }
 
-  for (const site of sites.slice(0, 30)) {
+  // V3.1: 候选点原先按 x 坐标顺序排列，只取前 30 棵会让地图一侧过密、另一侧荒凉。
+  // 独立随机源打散候选并按八个方位均衡选树，最多 32 棵，不扩大总模型开销。
+  const forestSites = [...sites];
+  const forestPick = mulberry32(20261021);
+  for (let i = forestSites.length - 1; i > 0; i--) {
+    const j = Math.floor(forestPick() * (i + 1));
+    [forestSites[i], forestSites[j]] = [forestSites[j], forestSites[i]];
+  }
+  const forestSectorCounts = new Array(8).fill(0), balancedForest = [];
+  for (const site of forestSites) {
+    const sector = Math.min(7, Math.floor((Math.atan2(site.zb, site.xb) + Math.PI) / (Math.PI * 2) * 8));
+    if (forestSectorCounts[sector] >= 4) continue;
+    balancedForest.push(site);
+    forestSectorCounts[sector]++;
+    if (balancedForest.length >= 32) break;
+  }
+  for (const site of balancedForest) {
     const { xb, zb, h } = site;
     const kind = rng();
     const pine = site.alt > 8 || (site.alt > 5 && kind < 0.45);
@@ -464,6 +484,35 @@ export function generateWorld() {
     for (let y = 1; y <= th; y++) grid.set(spot.xb, spot.h + y, spot.zb, T.TLOG);
     const rr = Math.max(2, Math.round((0.7 + rng() * 0.5) * V));
     blob(spot.xb, spot.h + th + Math.round(rr * 0.5), spot.zb, rr, Math.round(rr * 0.9), rr, T.TLEAF, 0.26);
+  }
+
+  // ---- V3.1 山坡微生态：独立于河边草甸的布景规则 ----
+  // 贴合真实高度场；山脊留白，山脚略密，林缘聚集，避免填满每一个坡面。
+  const hillShrubs = [], hillStones = [];
+  const hillRng = mulberry32(20261020);
+  for (let i = 0; i < 4600 && (hillShrubs.length < 165 || hillStones.length < 180); i++) {
+    const a = hillRng() * Math.PI * 2, r = 16 + Math.sqrt(hillRng()) * 34;
+    const x = Math.cos(a) * r, z = Math.sin(a) * r;
+    const xb = Math.round(x * V), zb = Math.round(z * V);
+    const h = getH(xb, zb);
+    if (h <= V || h > 12 * V) continue;
+    if (grid.get(xb, h, zb) !== T.GRASS || grid.get(xb, h + 1, zb)) continue;
+    if (Math.abs(z - riverZ(x)) < RIVER_HALF + 2.6) continue;
+    if (isPath(x, z) || rectDist(HUT_ZONE, x, z) < 4 || rectDist(TREE_ZONE, x, z) < 4) continue;
+    const patch = fbm(x * 0.085 + 7, z * 0.085 - 3);
+    const exposed = fbm(x * 0.14 - 9, z * 0.14 + 12);
+    const onShrubPatch = patch > 0.45 && exposed > 0.29;
+    // 山腰和山脚有元素，山顶只保留少量孤立岩石。
+    const shrub = onShrubPatch && hillRng() > 0.30 && hillShrubs.length < 165;
+    const stone = (patch < 0.51 || exposed > 0.63) && hillStones.length < 180;
+    const y = (h + 0.5) / V;
+    if (shrub && !hillShrubs.some(p => Math.hypot(p.x - x, p.z - z) < 1.6)) {
+      hillShrubs.push({ x, z, y, size: 0.57 + hillRng() * 0.63, rot: hillRng() * 6.283,
+        v: hillRng() });
+    } else if (stone && hillRng() < 0.58 && !hillStones.some(p => Math.hypot(p.x - x, p.z - z) < 1.05)) {
+      hillStones.push({ x, z, y, size: 0.45 + hillRng() * 0.7, rot: hillRng() * 6.283,
+        v: hillRng() });
+    }
   }
 
   // ---- 风车：远处山脊上的地标 ----
@@ -713,19 +762,19 @@ export function generateWorld() {
   const reeds = [];
   for (let x = -25; x <= 25; x += 1.2 + rng() * 3.4) {
     for (const side of [-1, 1]) {
-      if (rng() > 0.66) continue;
-      if (x >= PATH_X0 - 1.2 && x <= PATH_X1 + 1.2) continue;
+      if (rng() > 0.58) continue;
+      if (x >= PATH_X0 - 3 && x <= PATH_X1 + 3) continue;
       const bx = x + (rng() - 0.5) * 0.7;
       const bz = riverZ(bx) + side * (RIVER_HALF + 0.1 + rng() * 0.55);
       const xb0 = Math.round(bx * V), zb0 = Math.round(bz * V);
       const h0 = getH(xb0, zb0);
       if (h0 !== 0 || grid.get(xb0, 1, zb0)) continue;
-      const n = 4 + Math.floor(rng() * 6);
+      const n = 2 + Math.floor(rng() * 4);
       for (let k = 0; k < n; k++) {
         const a = rng() * Math.PI * 2, rr = rng() * 0.5;
         reeds.push({
           x: bx + Math.cos(a) * rr, z: bz + Math.sin(a) * rr,
-          h: 0.34 + rng() * 0.72, v: rng(), a, r: rr,
+          h: 0.32 + rng() * 0.54, v: rng(), a, r: rr,
         });
       }
     }
@@ -755,7 +804,7 @@ export function generateWorld() {
 
   return {
     grid, getH: heightAtWorld, topAt, windows, chimney, fruitSpots, flowerSpots, groundFlowers, reeds, bridge,
-    tufts, lilies,
+    tufts, lilies, hillShrubs, hillStones,
     windmill: hub ? { hub, ground: wmGround / V, top: wmTop / V } : null,
     door: { x: (doorX0 + doorX1) / 2 / V, z: HUT.z1 },
   };
@@ -766,7 +815,7 @@ export function generateWorld() {
 // 没有这条护边，线性过滤会把邻格的像素混进边缘 —— 一整片草地就会浮出一层细网格。
 export const ATLAS = { TILE: 16, PAD: 4, SLOT: 24, TILES: 16 };
 const { TILE, PAD, SLOT, TILES } = ATLAS;
-export const TILE_ID = { NOISE: 0, STONE: 1, PLANK: 2, LOG: 3, LOGTOP: 4, THATCH: 5, LEAF: 6, MUD: 7, GRAVEL: 8, GRASS: 9 };
+export const TILE_ID = { NOISE: 0, STONE: 1, PLANK: 2, LOG: 3, LOGTOP: 4, THATCH: 5, LEAF: 6, MUD: 7, GRAVEL: 8, GRASS: 9, HILL_GRASS: 10 };
 
 export function makeAtlas() {
   const cv = document.createElement('canvas');
@@ -791,6 +840,9 @@ export function makeAtlas() {
     px(7, x, y, r < 0.06 ? 0.82 : 0.94 + rnd() * 0.05);
     px(8, x, y, r < 0.24 ? 0.86 : 0.95 + rnd() * 0.05);
     px(9, x, y, r < 0.05 ? 0.968 : 0.986 + rnd() * 0.014);
+    // 高坡专用柔和纹理：抑制小方块在远景不断重复产生的亮暗细条纹。
+    // 保留近景草地原纹理，让河边仍有细节与层次。
+    px(10, x, y, 0.991 + 0.008 * fbm(x * 0.14 + 8, y * 0.14 - 6));
   }
   // 护边：把每格的边缘像素往外复制一圈
   const img = g.getImageData(0, 0, cv.width, cv.height);
@@ -824,11 +876,11 @@ export function makeAtlas() {
   return tex;
 }
 
-function tileFor(t, dir) {
+function tileFor(t, dir, y) {
   const top = dir === 2 || dir === 3;
   switch (t) {
     // 顶面和侧面用同一张图：两张图平均亮度不同，台阶坡面会交替成棋盘格
-    case T.GRASS: return TILE_ID.GRASS;
+    case T.GRASS: return y >= 2 * V ? TILE_ID.HILL_GRASS : TILE_ID.GRASS;
     case T.STONE: case T.COBBLE: return TILE_ID.STONE;
     case T.PATH: return TILE_ID.GRAVEL;
     case T.WETSAND: return TILE_ID.GRAVEL;
@@ -849,28 +901,37 @@ const C = (hex) => new THREE.Color(hex);
 // 绘本配色的关键是「明度分层」：地面最亮、草与树最深、房子在中间调。
 // 之前四季都挤在中明度的黄绿调里，远看就糊成一团。
 const PALETTE = {
-  spring: { grass: C('#aee08c'), leafA: C('#79c063'), leafB: C('#93d078'), leafC: C('#4e8f52'), tleaf: C('#8ccf6c'), thatch: C('#ecd096'), crop: C('#79bd4e') },
-  summer: { grass: C('#86c96c'), leafA: C('#4f8f47'), leafB: C('#62a355'), leafC: C('#3a7045'), tleaf: C('#63a957'), thatch: C('#e3c48a'), crop: C('#8aa83f') },
+  spring: { grass: C('#abc49b'), grassDry: C('#c5ba96'), grassCool: C('#8fb8a5'), leafA: C('#83ab81'), leafB: C('#a2b98f'), leafC: C('#648c76'), tleaf: C('#99b58b'), thatch: C('#e5cfaa'), crop: C('#91ac78') },
+  summer: { grass: C('#90ac83'), grassDry: C('#b5b08a'), grassCool: C('#749b8b'), leafA: C('#668e72'), leafB: C('#8fa885'), leafC: C('#4f786d'), tleaf: C('#789a80'), thatch: C('#dcc398'), crop: C('#9aa877') },
   autumn: { grass: C('#dcc878'), leafA: C('#d99a54'), leafB: C('#c07a47'), leafC: C('#4f7d50'), tleaf: C('#c9a259'), thatch: C('#e0bd7f'), crop: C('#d19b33') },
   winter: { grass: C('#f2f7fb'), leafA: C('#8b857a'), leafB: C('#8b857a'), leafC: C('#3f6647'), tleaf: C('#8b857a'), thatch: C('#c8a672'), crop: C('#b9a37e') },
 };
 const FIXED = {
-  dirt: C('#9c7352'), stone: C('#968d80'), sand: C('#e7d6ab'), path: C('#bfae8e'), log: C('#7a5c42'), logTop: C('#b0916a'),
+  dirt: C('#9c7352'), stone: C('#968d80'), sand: C('#d8caa9'), path: C('#bfae8e'), log: C('#7a5c42'), logTop: C('#b0916a'),
   mud: C('#f8f0dc'), plank: C('#c79b69'), cobble: C('#a49b88'), mlog: C('#6d5238'), tlog: C('#8a6e50'), tlogTop: C('#9d7d5e'),
-  snow: C('#f7fbff'), autumnYellow: C('#eec13c'), wetsand: C('#c0a880'), soil: C('#a07b5e'), scree: C('#aca69b'),
+  snow: C('#f7fbff'), autumnYellow: C('#eec13c'), wetsand: C('#aa9f89'), soil: C('#a07b5e'), scree: C('#aca69b'),
 };
 // 雪线按「世界高度」算，faceColor 里再乘回 V（方块坐标）
 const SNOW_LINE = { spring: 99, summer: 99, autumn: 99, winter: -99 };
 
 const tmp = new THREE.Color(), tmpSide = new THREE.Color();
-function faceColor(t, dir, y, v, season, out) {
+function faceColor(t, dir, y, v, season, out, tint = 0.5) {
   const p = PALETTE[season];
   const yw = y / V;
   const snowy = dir === 2 && t !== T.WATER && (season === 'winter' ? t !== T.TLEAF : yw >= SNOW_LINE[season] && (t === T.STONE || t === T.GRASS || t === T.DIRT));
   if (snowy && !(t === T.MUD)) { out.copy(FIXED.snow); return out; }
   switch (t) {
     // 侧面直接用草色压暗一点。原来掺土色，方块减半后每一级台阶都会变成一条褐色横纹
-    case T.GRASS: out.copy(season === 'winter' ? FIXED.snow : p.grass); break;
+    case T.GRASS:
+      out.copy(season === 'winter' ? FIXED.snow : p.grass);
+      // 春夏用低频整片冷暖草地，而不是逐格棋盘色差；山丘随之有自然色带。
+      if (p.grassDry) {
+        const dry = smoothstep(0.51, 0.68, tint);
+        const cool = 1 - smoothstep(0.32, 0.48, tint);
+        out.lerp(p.grassDry, dry * 0.55);
+        out.lerp(p.grassCool, cool * 0.48);
+      }
+      break;
     case T.DIRT: out.copy(FIXED.dirt); break;
     // 岩体：高度做沉积层理，越高越偏冷；再叠一层低频斑驳当风化
     case T.STONE: out.copy(FIXED.stone).multiplyScalar(0.94 + v * 0.1); break;
@@ -928,7 +989,7 @@ const isGround = (t) => t === T.GRASS || t === T.DIRT || t === T.STONE || t === 
  * 把网格里满足 filter 的方块转成一个 BufferGeometry（只生成外露的面，带顶点环境光遮蔽）。
  * 返回 { geometry, recolor(season) }。
  */
-export function buildMesh(grid, filter, origin = [0, 0, 0]) {
+export function buildMesh(grid, filter, origin = [0, 0, 0], skipFarTerrain = false) {
   const pos = [], nor = [], uv = [], col = [], idx = [];
   const meta = []; // 每个面：type, dir, y, v, ao0..ao3
   let vcount = 0;
@@ -939,6 +1000,7 @@ export function buildMesh(grid, filter, origin = [0, 0, 0]) {
       for (let z = -O; z <= O; z++) {
         const t = d[base + z + O];
         if (!t || !filter(t)) continue;
+        if (skipFarTerrain && isGround(t) && isDistantSlopeColumn(x,z)) continue;
         const v = hash3(x, y, z);
         for (let f = 0; f < 6; f++) {
           const dir = DIRS[f];
@@ -946,7 +1008,7 @@ export function buildMesh(grid, filter, origin = [0, 0, 0]) {
           const nb = grid.get(nx, ny, nz);
           if (t === T.WATER) { if (nb === T.WATER || occludes(t, nb)) continue; }
           else if (occludes(t, nb)) continue;
-          const tile = tileFor(t, f);
+          const tile = tileFor(t, f, y);
           // 图集带护边，UV 直接取格子边界：mipmap 混到的是自己边缘的复制像素，不是邻格
           const u0 = (tile * SLOT + PAD) / (SLOT * TILES), u1 = (tile * SLOT + PAD + TILE) / (SLOT * TILES);
           const v0 = PAD / (TILE + 2 * PAD), v1 = (PAD + TILE) / (TILE + 2 * PAD);
@@ -999,7 +1061,7 @@ export function buildMesh(grid, filter, origin = [0, 0, 0]) {
     const faces = meta.length / 9;
     for (let i = 0; i < faces; i++) {
       const m = i * 9;
-      faceColor(meta[m], meta[m + 1], meta[m + 2], meta[m + 3], season, tmp);
+      faceColor(meta[m], meta[m + 1], meta[m + 2], meta[m + 3], season, tmp, meta[m + 4]);
       const ground = isGround(meta[m]);
       const shade = (ground ? 1 : FACE_SHADE[meta[m + 1]]) * (0.96 + meta[m + 4] * 0.08);
       for (let k = 0; k < 4; k++) {
@@ -1011,6 +1073,71 @@ export function buildMesh(grid, filter, origin = [0, 0, 0]) {
     colorAttr.needsUpdate = true;
   }
   return { geometry, recolor, faces: meta.length / 9 };
+}
+
+
+// 远景坡面 LOD：只替换小屋后方的北向山地表层。
+// 地形格与 W.getH 的整数体素高度不变，因此现有树、建筑、碰撞仍使用原来的坐标。
+// 边界处保留半格体素过渡，避免与前景/河岸的规则混用。
+const LOD_NORTH_EDGE = -24 * V;
+export function isDistantSlopeColumn(x, z) {
+  // Use a contiguous background region. Radial inner masks left crescent cracks.
+  // Keep a 3-world-unit voxel rim so the circular map edge never opens.
+  return z <= LOD_NORTH_EDGE && x * x + z * z < ((R - 3) * V) ** 2;
+}
+
+export function buildDistantSlopeLOD({ grid, getH }) {
+  const positions = [], colors = [], indices = [], shades = [];
+  const step = 2; // 比原始体素面更稀疏；每两个小方格共享三角形坡面
+  const yAt = (x, z) => getH(x / V, z / V) + 0.5 / V;
+  // Surface samples retain exact height at their sample locations. Objects and
+  // collisions remain attached to the untouched underlying voxel world.
+  const verts = new Map();
+  const vertex = (x, z) => {
+    const key = x + ':' + z;
+    if (verts.has(key)) return verts.get(key);
+    const y = yAt(x, z);
+    const idx = positions.length / 3;
+    positions.push(x / V, y + 0.016, z / V);
+    colors.push(1, 1, 1);
+    const h = Math.round(getH(x / V, z / V) * V);
+    const material = grid.get(x, h, z);
+    shades.push(material === T.STONE || material === T.SCREE ? material : T.GRASS,
+      h, hash3(x, h, z), fbm(x * 0.028 + 11, z * 0.028 - 4));
+    verts.set(key, idx);
+    return idx;
+  };
+  const min = -R * V, max = R * V;
+  for (let x = min; x + step <= max; x += step) {
+    for (let z = min; z + step <= -22 * V; z += step) {
+      const corners = [[x,z],[x+step,z],[x+step,z+step],[x,z+step]];
+      // Coverage extends past the removed voxel region by ~2 world units,
+      // so the smooth surface has a physical overlap instead of an empty seam.
+      if (!corners.every(([cx,cz]) => cx*cx+cz*cz < ((R - 1) * V)**2)) continue;
+      const [a,b,c,d] = corners.map(([cx,cz]) => vertex(cx,cz));
+      // CCW winding when viewed from above.
+      indices.push(a,c,b, a,d,c);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  const colorAttr = new THREE.Float32BufferAttribute(colors,3);
+  geometry.setAttribute('color',colorAttr);
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  const color = new THREE.Color();
+  function recolor(season) {
+    const out = colorAttr.array;
+    for (let i=0; i<shades.length; i+=4) {
+      const [t,h,v,tint] = shades.slice(i,i+4);
+      faceColor(t,2,h,v,season,color,tint);
+      const p=i / 4 * 3;
+      out[p]=color.r;out[p+1]=color.g;out[p+2]=color.b;
+    }
+    colorAttr.needsUpdate=true;
+  }
+  return {geometry,recolor,faces:indices.length/3};
 }
 
 export const filters = {
