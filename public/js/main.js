@@ -270,6 +270,35 @@ scene.add(porchLight);
 }
 
 
+
+// ---------- 风车叶片：缓慢转，给远景一点活气 ----------
+let sailGroup = null;
+if (W.windmill) {
+  const { hub } = W.windmill;
+  sailGroup = new THREE.Group();
+  sailGroup.position.set(hub.x, hub.y, hub.z);
+  sailGroup.rotation.y = -0.5;
+  const beamMat = new THREE.MeshLambertMaterial({ color: 0x7a5c42 });
+  const clothMat = new THREE.MeshLambertMaterial({ color: 0xe4d6b6 });
+  for (let i = 0; i < 4; i++) {
+    const arm = new THREE.Group();
+    arm.rotation.z = (i / 4) * Math.PI * 2;
+    const spine = new THREE.Mesh(new THREE.BoxGeometry(0.09, 2.9, 0.09), beamMat);
+    spine.position.y = 1.45;
+    arm.add(spine);
+    for (let k = 0; k < 3; k++) {
+      const cloth = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.62, 0.04), clothMat);
+      cloth.position.set(0.37, 1.0 + k * 0.72, 0);
+      arm.add(cloth);
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.05, 0.05), beamMat);
+      bar.position.set(0.36, 1.32 + k * 0.72, 0);
+      arm.add(bar);
+    }
+    sailGroup.add(arm);
+  }
+  scene.add(sailGroup);
+}
+
 // ---------- 门外的小物件：信箱、路牌、纸船 ----------
 const groundY = (x, z) => Math.max(0, W.getH(Math.round(x), Math.round(z))) + 0.5 / V;
 const lamb = (color, map = null) => new THREE.MeshLambertMaterial({ color, map });
@@ -1231,6 +1260,8 @@ function frame() {
     }
     bflyMesh.instanceMatrix.needsUpdate = true;
   }
+
+  if (sailGroup) sailGroup.rotation.z += dt * 0.42;
 
   controls.update();
   keepAboveGround();

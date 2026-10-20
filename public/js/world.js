@@ -32,7 +32,7 @@ export const TREE = { x: 6, z: -3 };
 const TREE_ZONE = { x0: 0, x1: 12, z0: -9, z1: 2 };
 const PATH_X0 = -10, PATH_X1 = -8;
 // 农田：在枣树右侧的一块平地
-export const FIELD = { x0: 9.6, x1: 15.4, z0: -8, z1: -2.6 };
+export const FIELD = { x0: 9.2, x1: 14.6, z0: -8, z1: -2.6 };
 const FIELD_ZONE = { x0: 8.2, x1: 17, z0: -9.5, z1: -1.2 };
 
 // ---------- 噪声与随机 ----------
@@ -182,7 +182,7 @@ export function generateWorld() {
       grid.set(xb, h, zb, T.SOIL);
       const row = Math.floor((zb - fz0) / V) % 2;
       if (row === 0) {
-        const tall = hash3(xb, 3, zb) > 0.45 ? 2 : 1;
+        const tall = hash3(xb, 3, zb) > 0.4 ? 3 : 2;
         for (let k = 1; k <= tall; k++) grid.set(xb, h + k, zb, T.CROP);
       }
     }
@@ -420,6 +420,43 @@ export function generateWorld() {
     blob(spot.xb, spot.h + th + Math.round(rr * 0.5), spot.zb, rr, Math.round(rr * 0.9), rr, T.TLEAF, 0.26);
   }
 
+  // ---- 风车：远处山脊上的地标 ----
+  const WM = { x: -8, z: -28 };
+  const wmx = Math.round(WM.x * V), wmz = Math.round(WM.z * V);
+  const wmGround = getH(wmx, wmz);
+  let wmTop = 0, hub = null;
+  if (wmGround > 0) {
+    let hMax = wmGround;
+    for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) hMax = Math.max(hMax, getH(wmx + dx, wmz + dz));
+    for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+      for (let y = wmGround; y <= hMax; y++) grid.set(wmx + dx, y, wmz + dz, T.COBBLE);
+    }
+    const base = hMax + 1;
+    const height = Math.round(5.6 * V);
+    for (let k = 0; k < height; k++) {
+      const t = k / height;
+      const half = Math.max(1, Math.round(2.2 * (1 - t * 0.4)));
+      for (let dx = -half; dx <= half; dx++) for (let dz = -half; dz <= half; dz++) {
+        if (Math.abs(dx) === half && Math.abs(dz) === half) continue;
+        const t2 = k < 2 ? T.COBBLE : T.MUD;
+        grid.set(wmx + dx, base + k, wmz + dz, t2);
+      }
+    }
+    // 门洞
+    for (let k = 0; k < 2 * V; k++) {
+      if (wmz + 2 < W) grid.set(wmx, base + k, wmz + 2, T.AIR);
+    }
+    // 茅草顶
+    for (let k = 0; k < 3; k++) {
+      const half = Math.max(0, 2 - k);
+      for (let dx = -half; dx <= half; dx++) for (let dz = -half; dz <= half; dz++) {
+        grid.set(wmx + dx, base + height + k, wmz + dz, T.THATCH);
+      }
+    }
+    wmTop = base + height + 3;
+    hub = { x: WM.x, y: (base + Math.round(height * 0.72)) / V, z: (wmz + 3) / V };
+  }
+
   // ---- 茅草屋：石基座 + 半木构架 + 窗台门框 + 双坡茅草顶 ----
   // 全部按小方块坐标搭（1 个世界单位 = V 块），对外仍然导出世界坐标。
   const windows = [];
@@ -567,11 +604,11 @@ export function generateWorld() {
 
   // 冠簇：五团分离的球，彼此留缝
   const clusters = [
-    { x: tbx - W3(2.1), y: W3(7.2), z: tbz + W3(1.2), r: 7 },
-    { x: tbx + W3(2.2), y: W3(7.3), z: tbz - W3(1.3), r: 7 },
-    { x: tbx + W3(0.3), y: W3(8.0), z: tbz + W3(1.7), r: 6 },
-    { x: tbx + W3(0.1), y: W3(8.2), z: tbz - W3(0.2), r: 7 },
-    { x: tbx - W3(1.3), y: W3(7.5), z: tbz - W3(2.0), r: 6 },
+    { x: tbx - W3(1.9), y: W3(7.5), z: tbz + W3(1.1), r: 6 },
+    { x: tbx + W3(2.0), y: W3(7.6), z: tbz - W3(1.2), r: 6 },
+    { x: tbx + W3(0.3), y: W3(8.3), z: tbz + W3(1.5), r: 5 },
+    { x: tbx + W3(0.1), y: W3(8.5), z: tbz - W3(0.2), r: 6 },
+    { x: tbx - W3(1.2), y: W3(7.8), z: tbz - W3(1.8), r: 5 },
   ];
   const leafCells = [];
   for (const c of clusters) {
@@ -612,7 +649,7 @@ export function generateWorld() {
 
   // ---- 草地上的小花、河边芦苇 ----
   const groundFlowers = [];
-  for (let i = 0; i < 900 && groundFlowers.length < 120; i++) {
+  for (let i = 0; i < 700 && groundFlowers.length < 78; i++) {
     const x = (rng() * 2 - 1) * 20, z = (rng() * 2 - 1) * 20;
     const xb = Math.round(x * V), zb = Math.round(z * V);
     if (Math.hypot(x, z) > 20) continue;
@@ -666,6 +703,7 @@ export function generateWorld() {
   return {
     grid, getH: heightAtWorld, topAt, windows, chimney, fruitSpots, flowerSpots, groundFlowers, reeds, bridge,
     tufts, lilies,
+    windmill: hub ? { hub, ground: wmGround / V, top: wmTop / V } : null,
     door: { x: (doorX0 + doorX1) / 2 / V, z: HUT.z1 },
   };
 }
@@ -735,7 +773,7 @@ const PALETTE = {
 const FIXED = {
   dirt: C('#8e6a4e'), stone: C('#a09a8c'), sand: C('#ddcba0'), path: C('#b3a68c'), log: C('#7a5c42'), logTop: C('#a88a63'),
   mud: C('#f0e6cf'), plank: C('#c09a6b'), cobble: C('#9a927f'), mlog: C('#6d5238'), tlog: C('#82684c'), tlogTop: C('#94765a'),
-  snow: C('#f2f6fa'), autumnYellow: C('#e8c23a'), wetsand: C('#b8a078'), soil: C('#8a6a52'),
+  snow: C('#f2f6fa'), autumnYellow: C('#e8c23a'), wetsand: C('#b8a078'), soil: C('#96755c'),
 };
 const SNOW_LINE = { spring: 25, summer: 99, autumn: 27, winter: -99 };
 
@@ -783,8 +821,8 @@ const DIRS = [
   { n: [0, 0, 1], c: [[-0.5, -0.5, 0.5], [0.5, -0.5, 0.5], [0.5, 0.5, 0.5], [-0.5, 0.5, 0.5]] },
   { n: [0, 0, -1], c: [[0.5, -0.5, -0.5], [-0.5, -0.5, -0.5], [-0.5, 0.5, -0.5], [0.5, 0.5, -0.5]] },
 ];
-const FACE_SHADE = [0.9, 0.9, 1.0, 0.72, 0.84, 0.84];
-const AO_CURVE = [0.74, 0.86, 0.94, 1.0];
+const FACE_SHADE = [0.94, 0.94, 1.0, 0.82, 0.9, 0.9];
+const AO_CURVE = [0.8, 0.89, 0.96, 1.0];
 const UVS = [[0, 0], [1, 0], [1, 1], [0, 1]];
 // 每个方向上，与法线垂直的两个轴（0=x 1=y 2=z）。预先算好，避免逐面分配数组。
 const AXIS_A = [1, 1, 0, 0, 0, 0];

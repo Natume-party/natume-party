@@ -26,7 +26,7 @@ body {
 /* 很轻的暗角，让视线落在中间的小屋上 */
 body::after {
   content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 2;
-  background: radial-gradient(120% 92% at 50% 46%, rgba(6, 11, 20, 0) 58%, rgba(6, 11, 20, .3) 100%);
+  background: radial-gradient(120% 92% at 50% 46%, rgba(38, 26, 16, 0) 56%, rgba(38, 26, 16, .32) 100%);
 }
 
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
