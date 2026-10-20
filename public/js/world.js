@@ -1079,10 +1079,11 @@ export function buildMesh(grid, filter, origin = [0, 0, 0], skipFarTerrain = fal
 // 远景坡面 LOD：只替换小屋后方的北向山地表层。
 // 地形格与 W.getH 的整数体素高度不变，因此现有树、建筑、碰撞仍使用原来的坐标。
 // 边界处保留半格体素过渡，避免与前景/河岸的规则混用。
-const LOD_NORTH_EDGE = -23 * V;
+const LOD_NORTH_EDGE = -24 * V;
 export function isDistantSlopeColumn(x, z) {
-  return z <= LOD_NORTH_EDGE && x * x + z * z > (26 * V) ** 2
-    && x * x + z * z < (R * V) ** 2;
+  // Use a contiguous background region. Radial inner masks left crescent cracks.
+  // Keep a 3-world-unit voxel rim so the circular map edge never opens.
+  return z <= LOD_NORTH_EDGE && x * x + z * z < ((R - 3) * V) ** 2;
 }
 
 export function buildDistantSlopeLOD({ grid, getH }) {
@@ -1108,9 +1109,11 @@ export function buildDistantSlopeLOD({ grid, getH }) {
   };
   const min = -R * V, max = R * V;
   for (let x = min; x + step <= max; x += step) {
-    for (let z = min; z + step <= LOD_NORTH_EDGE; z += step) {
+    for (let z = min; z + step <= -22 * V; z += step) {
       const corners = [[x,z],[x+step,z],[x+step,z+step],[x,z+step]];
-      if (!corners.every(([cx,cz]) => isDistantSlopeColumn(cx,cz))) continue;
+      // Coverage extends past the removed voxel region by ~2 world units,
+      // so the smooth surface has a physical overlap instead of an empty seam.
+      if (!corners.every(([cx,cz]) => cx*cx+cz*cz < ((R - 1) * V)**2)) continue;
       const [a,b,c,d] = corners.map(([cx,cz]) => vertex(cx,cz));
       // CCW winding when viewed from above.
       indices.push(a,c,b, a,d,c);
