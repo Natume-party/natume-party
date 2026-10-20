@@ -815,7 +815,7 @@ export function generateWorld() {
 // 没有这条护边，线性过滤会把邻格的像素混进边缘 —— 一整片草地就会浮出一层细网格。
 export const ATLAS = { TILE: 16, PAD: 4, SLOT: 24, TILES: 16 };
 const { TILE, PAD, SLOT, TILES } = ATLAS;
-export const TILE_ID = { NOISE: 0, STONE: 1, PLANK: 2, LOG: 3, LOGTOP: 4, THATCH: 5, LEAF: 6, MUD: 7, GRAVEL: 8, GRASS: 9 };
+export const TILE_ID = { NOISE: 0, STONE: 1, PLANK: 2, LOG: 3, LOGTOP: 4, THATCH: 5, LEAF: 6, MUD: 7, GRAVEL: 8, GRASS: 9, HILL_GRASS: 10 };
 
 export function makeAtlas() {
   const cv = document.createElement('canvas');
@@ -840,6 +840,9 @@ export function makeAtlas() {
     px(7, x, y, r < 0.06 ? 0.82 : 0.94 + rnd() * 0.05);
     px(8, x, y, r < 0.24 ? 0.86 : 0.95 + rnd() * 0.05);
     px(9, x, y, r < 0.05 ? 0.968 : 0.986 + rnd() * 0.014);
+    // 高坡专用柔和纹理：抑制小方块在远景不断重复产生的亮暗细条纹。
+    // 保留近景草地原纹理，让河边仍有细节与层次。
+    px(10, x, y, 0.991 + 0.008 * fbm(x * 0.14 + 8, y * 0.14 - 6));
   }
   // 护边：把每格的边缘像素往外复制一圈
   const img = g.getImageData(0, 0, cv.width, cv.height);
@@ -873,11 +876,11 @@ export function makeAtlas() {
   return tex;
 }
 
-function tileFor(t, dir) {
+function tileFor(t, dir, y) {
   const top = dir === 2 || dir === 3;
   switch (t) {
     // 顶面和侧面用同一张图：两张图平均亮度不同，台阶坡面会交替成棋盘格
-    case T.GRASS: return TILE_ID.GRASS;
+    case T.GRASS: return y >= 2 * V ? TILE_ID.HILL_GRASS : TILE_ID.GRASS;
     case T.STONE: case T.COBBLE: return TILE_ID.STONE;
     case T.PATH: return TILE_ID.GRAVEL;
     case T.WETSAND: return TILE_ID.GRAVEL;
@@ -1004,7 +1007,7 @@ export function buildMesh(grid, filter, origin = [0, 0, 0]) {
           const nb = grid.get(nx, ny, nz);
           if (t === T.WATER) { if (nb === T.WATER || occludes(t, nb)) continue; }
           else if (occludes(t, nb)) continue;
-          const tile = tileFor(t, f);
+          const tile = tileFor(t, f, y);
           // 图集带护边，UV 直接取格子边界：mipmap 混到的是自己边缘的复制像素，不是邻格
           const u0 = (tile * SLOT + PAD) / (SLOT * TILES), u1 = (tile * SLOT + PAD + TILE) / (SLOT * TILES);
           const v0 = PAD / (TILE + 2 * PAD), v1 = (PAD + TILE) / (TILE + 2 * PAD);
