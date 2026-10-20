@@ -229,6 +229,24 @@ for (const w of W.windows) {
   const m = new THREE.Mesh(geo, windowMat);
   m.position.set(w.x, w.y, w.z);
   scene.add(m);
+  // V3.2 四扇窗共用同尺寸的立体木框；前墙左右两窗镜像一致。
+  const frameMat = new THREE.MeshLambertMaterial({ color: 0x69523b });
+  const face = w.axis === 'z';
+  const thickness = 0.105, depth = 0.18;
+  const frame = new THREE.Group();
+  frame.position.set(w.x, w.y, w.z);
+  for(const edge of [-0.5,0.5]){
+    const vertical = new THREE.Mesh(
+      new THREE.BoxGeometry(face?thickness:depth, 1.12, face?depth:thickness), frameMat);
+    if(face)vertical.position.x=edge;
+    else vertical.position.z=edge;
+    frame.add(vertical);
+    const horizontal = new THREE.Mesh(
+      new THREE.BoxGeometry(face?1.12:depth, thickness, face?depth:1.12), frameMat);
+    horizontal.position.y=edge;
+    frame.add(horizontal);
+  }
+  scene.add(frame);
 }
 
 const plankTex = tileTexture(TILE_ID.PLANK);
@@ -243,15 +261,19 @@ door.add(knob);
 doorPivot.add(door);
 scene.add(doorPivot);
 
+// V3.2 门前成对壁灯：几何上镜像，门板与窗框都以入口中心线为基准。
 const lanternMat = new THREE.MeshBasicMaterial({ color: 0x8a7a5a });
-const lantern = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.44, 0.34), lanternMat);
-lantern.position.set(W.door.x - 1.2, 2.2, W.door.z + 0.72);
-const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.4), new THREE.MeshLambertMaterial({ color: 0x3a2a1a }));
-bracket.position.set(0, 0.3, -0.2);
-lantern.add(bracket);
-scene.add(lantern);
+const lanternBracketMat = new THREE.MeshLambertMaterial({ color: 0x3a2a1a });
+for(const side of [-1,1]){
+  const lantern = new THREE.Mesh(new THREE.BoxGeometry(0.30,0.39,0.30),lanternMat);
+  lantern.position.set(W.door.x + side*1.20, 2.28, W.door.z + 0.72);
+  const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.36),lanternBracketMat);
+  bracket.position.set(0,0.29,-0.19);
+  lantern.add(bracket);
+  scene.add(lantern);
+}
 const porchLight = new THREE.PointLight(0xffc46b, 0, 22, 1.6);
-porchLight.position.set(W.door.x - 0.5, 2.6, W.door.z + 2);
+porchLight.position.set(W.door.x, 2.6, W.door.z + 2);
 scene.add(porchLight);
 
 // ---------- 小桥 V3.1：紧凑木拱桥，连续扶手与两侧承重梁 ----------

@@ -648,6 +648,24 @@ export function generateWorld() {
     if (za > zb) break;
     boxFill(hx0 - ov, hx1 + ov, roofY + k, roofY + k, za, zb, T.THATCH);
   }
+  // V3.2 两侧山墙补齐：原来屋顶升高后，东西侧墙顶部留下三角空隙。
+  // 同一中心轴和坡度公式，用于左右两面，保持房屋承重轮廓对称。
+  const ridgeZ = (hz0 + hz1) / 2;
+  const roofStartZ = hz0 - ov;
+  const roofEndZ = hz1 + ov;
+  for (const gx of [hx0, hx1]) {
+    for (let z=hz0; z<=hz1; z++) {
+      const raise = Math.floor(Math.min(z-roofStartZ, roofEndZ-z));
+      for (let y=roofY; y<roofY+raise; y++) {
+        if (!grid.get(gx,y,z)) grid.set(gx,y,z,T.MUD);
+      }
+    }
+    // 山墙中轴竖向构架：两端严格同坐标，强化屋架的完整感。
+    const midZ=Math.round(ridgeZ);
+    for(let y=roofY; y<roofY+half; y++){
+      if (grid.get(gx,y,midZ)===T.MUD) grid.set(gx,y,midZ,T.LOG);
+    }
+  }
   // 屋脊压条
   for (let x = hx0 - ov; x <= hx1 + ov; x++) {
     for (let z = hz0 - ov + half; z <= hz1 + ov - half; z++) grid.set(x, roofY + half + 1, z, T.RIDGE);
