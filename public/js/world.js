@@ -4,6 +4,7 @@ import * as THREE from 'three';
 export const T = {
   AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, SAND: 4, PATH: 5, LOG: 6, MUD: 7, PLANK: 8,
   THATCH: 9, COBBLE: 10, MLOG: 11, LEAF_A: 12, LEAF_B: 13, LEAF_C: 14, TLOG: 15, TLEAF: 16, WATER: 17,
+  RIDGE: 18,
 };
 
 // 细分倍数：1 个原方块 = V^3 个小方块，世界尺寸不变。
@@ -214,43 +215,114 @@ export function generateWorld() {
     }
   }
 
-  // ---- 茅草屋 ----
+  // ---- 茅草屋：石基座 + 半木构架 + 窗台门框 + 双坡茅草顶 ----
+  // 全部按小方块坐标搭（1 个世界单位 = V 块），对外仍然导出世界坐标。
   const windows = [];
-  const winSet = new Set([`${-11},2,${HUT.z1}`, `${-7},2,${HUT.z1}`, `${HUT.x0},2,${-9}`, `${HUT.x1},2,${-9}`]);
-  for (let x = HUT.x0; x <= HUT.x1; x++) {
-    for (let z = HUT.z0; z <= HUT.z1; z++) {
-      const edgeX = x === HUT.x0 || x === HUT.x1;
-      const edgeZ = z === HUT.z0 || z === HUT.z1;
-      if (!edgeX && !edgeZ) continue;
-      for (let y = 1; y <= 3; y++) {
-        const key = `${x},${y},${z}`;
-        if (x === HUT.doorX && z === HUT.z1 && y <= 2) continue;
-        if (winSet.has(key)) {
-          // 记录窗洞在小方块网格里的真实中心，窗口模型才能正好盖住洞口
-          const cx = (cell0(x) + (V - 1) / 2) / V;
-          const cy = (cell0(y) + (V - 1) / 2) / V;
-          const cz = (cell0(z) + (V - 1) / 2) / V;
-          windows.push({ x: cx, y: cy, z: cz, axis: edgeZ && !edgeX ? 'z' : 'x' });
-          continue;
-        }
-        fillCell(x, y, z, edgeX && edgeZ ? T.LOG : (y === 3 ? T.LOG : T.MUD));
-      }
+  const hx0 = Math.round(HUT.x0 * V), hx1 = Math.round(HUT.x1 * V);
+  const hz0 = Math.round(HUT.z0 * V), hz1 = Math.round(HUT.z1 * V);
+  const fy = 1;                        // 石基座：地表方块 0 之上
+  const wy0 = fy + 1;                  // 墙底
+  const wy1 = wy0 + 3 * V - 1;         // 墙顶（3 个世界单位）
+  const doorB = Math.round(HUT.doorX * V);
+  const doorX0 = doorB - Math.floor((V - 1) / 2), doorX1 = doorX0 + V - 1;
+  const doorY0 = wy0, doorY1 = wy0 + 2 * V - 1;
+  const boxFill = (x0, x1, y0, y1, z0, z1, t) => {
+    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) grid.set(x, y, z, t);
+  };
+  const inRing = (x, z) => x === hx0 || x === hx1 || z === hz0 || z === hz1;
+
+  // 窗洞：前墙两扇、两侧各一扇，1 个单位见方
+  const winDefs = [
+    { axis: 'z', b: Math.round(-10.6 * V), wall: hz1 },
+    { axis: 'z', b: Math.round(-7.4 * V), wall: hz1 },
+    { axis: 'x', b: Math.round(-9 * V), wall: hx0 },
+    { axis: 'x', b: Math.round(-9 * V), wall: hx1 },
+  ].map((w) => {
+    const a0 = w.b - Math.floor((V - 1) / 2);
+    const y0 = wy0 + 2;
+    return { ...w, a0, a1: a0 + V - 1, y0, y1: y0 + V - 1, dir: (w.axis === 'z' ? w.wall === hz1 : w.wall === hx1) ? 1 : -1 };
+  });
+  const isWindowCell = (x, y, z) => winDefs.some((w) => {
+    if (y < w.y0 || y > w.y1) return false;
+    return w.axis === 'z' ? (z === w.wall && x >= w.a0 && x <= w.a1) : (x === w.wall && z >= w.a0 && z <= w.a1);
+  });
+
+  // 基座 + 地板 + 门前石板
+  for (let x = hx0 - 1; x <= hx1 + 1; x++) for (let z = hz0 - 1; z <= hz1 + 1; z++) {
+    if (x === hx0 - 1 || x === hx1 + 1 || z === hz0 - 1 || z === hz1 + 1) grid.set(x, fy, z, T.COBBLE);
+  }
+  boxFill(hx0, hx1, fy, fy, hz0, hz1, T.PLANK);
+  boxFill(doorX0 - 1, doorX1 + 1, fy, fy, hz1 + 1, hz1 + 2, T.COBBLE);
+
+  // 灰泥墙（挖出门洞和窗洞）
+  for (let y = wy0; y <= wy1; y++) {
+    for (let x = hx0; x <= hx1; x++) for (let z = hz0; z <= hz1; z++) {
+      if (!inRing(x, z)) continue;
+      if (z === hz1 && x >= doorX0 && x <= doorX1 && y <= doorY1) continue;
+      if (isWindowCell(x, y, z)) continue;
+      grid.set(x, y, z, T.MUD);
     }
   }
-  // 屋顶：比墙更细的台阶，每 V 层收进 1 个世界方块
-  for (let k = 0; k < 4 * V; k++) {
-    const inset = Math.floor(k / V);
-    const yb = cell0(4) + k;
-    for (let xb = cell0(HUT.x0 - 1); xb <= (HUT.x1 + 1) * V; xb++) {
-      for (let zb = cell0(HUT.z0 - 1 + inset); zb <= (HUT.z1 + 1 - inset) * V; zb++) {
-        grid.set(xb, yb, zb, T.THATCH);
+  // 木构架：四角立柱 + 顶圈梁 + 转角斜撑
+  for (const [cx, cz] of [[hx0, hz0], [hx0, hz1], [hx1, hz0], [hx1, hz1]]) {
+    for (let y = wy0; y <= wy1; y++) grid.set(cx, y, cz, T.LOG);
+  }
+  for (let x = hx0; x <= hx1; x++) { grid.set(x, wy1, hz0, T.LOG); grid.set(x, wy1, hz1, T.LOG); }
+  for (let z = hz0; z <= hz1; z++) { grid.set(hx0, wy1, z, T.LOG); grid.set(hx1, wy1, z, T.LOG); }
+  const br = Math.min(2, V);
+  for (const [x, dx] of [[hx0, 1], [hx1, -1]]) {
+    for (let k = 1; k <= br; k++) { grid.set(x + dx * k, wy1 - k, hz1, T.LOG); grid.set(x + dx * k, wy1 - k, hz0, T.LOG); }
+  }
+  for (const [z, dz] of [[hz0, 1], [hz1, -1]]) {
+    for (let k = 1; k <= br; k++) { grid.set(hx0, wy1 - k, z + dz * k, T.LOG); grid.set(hx1, wy1 - k, z + dz * k, T.LOG); }
+  }
+  // 门框：两侧立柱 + 门楣
+  for (let y = wy0; y <= doorY1 + 1; y++) {
+    if (doorX0 - 1 > hx0) grid.set(doorX0 - 1, y, hz1, T.LOG);
+    if (doorX1 + 1 < hx1) grid.set(doorX1 + 1, y, hz1, T.LOG);
+  }
+  for (let x = doorX0 - 1; x <= doorX1 + 1; x++) grid.set(x, doorY1 + 1, hz1, T.LOG);
+
+  // 窗：石窗台（外挑一块）+ 木过梁，并导出窗口中心给 main.js
+  for (const w of winDefs) {
+    for (let a = w.a0 - 1; a <= w.a1 + 1; a++) {
+      if (w.axis === 'z') {
+        grid.set(a, w.y0 - 1, w.wall, T.COBBLE);
+        grid.set(a, w.y0 - 1, w.wall + w.dir, T.COBBLE);
+        grid.set(a, w.y1 + 1, w.wall, T.LOG);
+      } else {
+        grid.set(w.wall, w.y0 - 1, a, T.COBBLE);
+        grid.set(w.wall + w.dir, w.y0 - 1, a, T.COBBLE);
+        grid.set(w.wall, w.y1 + 1, a, T.LOG);
       }
     }
+    const along = (w.a0 + w.a1) / 2 / V, yc = (w.y0 + w.y1) / 2 / V;
+    windows.push(w.axis === 'z'
+      ? { x: along, y: yc, z: w.wall / V, axis: 'z' }
+      : { x: w.wall / V, y: yc, z: along, axis: 'x' });
   }
-  const chimney = { x: -7, z: -10 };
-  for (let yb = cell0(4); yb <= cell0(9); yb++) {
-    for (let i = 0; i < V; i++) for (let k = 0; k < V; k++) grid.set(cell0(chimney.x) + i, yb, cell0(chimney.z) + k, T.COBBLE);
+
+  // 双坡茅草顶：出挑 1 个单位，每层收 1 块
+  const ov = V;
+  const roofY = wy1 + 1;
+  const half = Math.floor((hz1 - hz0 + 1 + 2 * ov) / 2);
+  for (let k = 0; k <= half; k++) {
+    const za = hz0 - ov + k, zb = hz1 + ov - k;
+    if (za > zb) break;
+    boxFill(hx0 - ov, hx1 + ov, roofY + k, roofY + k, za, zb, T.THATCH);
   }
+  // 屋脊压条
+  for (let x = hx0 - ov; x <= hx1 + ov; x++) {
+    for (let z = hz0 - ov + half; z <= hz1 + ov - half; z++) grid.set(x, roofY + half + 1, z, T.RIDGE);
+  }
+  // 烟囱：石砌 + 帽
+  const chimney = { x: -7.5, z: -9 };
+  const chx = Math.round(chimney.x * V), chz = Math.round(chimney.z * V);
+  const chTop = roofY + half + 4;
+  for (let y = wy0 + 3; y <= chTop; y++) {
+    for (let i = 0; i < 2; i++) for (let k = 0; k < 2; k++) grid.set(chx + i, y, chz + k, T.COBBLE);
+  }
+  for (let i = -1; i <= 2; i++) for (let k = -1; k <= 2; k++) grid.set(chx + i, chTop + 1, chz + k, T.COBBLE);
 
   // ---- 枣树 ----
   const tb = TREE;
@@ -337,7 +409,7 @@ export function generateWorld() {
 
   return {
     grid, getH: heightAtWorld, topAt, windows, chimney, fruitSpots, flowerSpots, groundFlowers, reeds, bridge,
-    door: { x: (cell0(HUT.doorX) + (V - 1) / 2) / V, z: HUT.z1 },
+    door: { x: (doorX0 + doorX1) / 2 / V, z: HUT.z1 },
   };
 }
 
@@ -386,7 +458,7 @@ function tileFor(t, dir) {
     case T.LOG: case T.MLOG: case T.TLOG: return top ? TILE_ID.LOGTOP : TILE_ID.LOG;
     case T.MUD: return TILE_ID.MUD;
     case T.PLANK: return TILE_ID.PLANK;
-    case T.THATCH: return TILE_ID.THATCH;
+    case T.THATCH: case T.RIDGE: return TILE_ID.THATCH;
     case T.LEAF_A: case T.LEAF_B: case T.LEAF_C: case T.TLEAF: return TILE_ID.LEAF;
     default: return TILE_ID.NOISE;
   }
@@ -401,8 +473,8 @@ const PALETTE = {
   winter: { grass: C('#eef3f7'), leafA: C('#7a6a55'), leafB: C('#7a6a55'), leafC: C('#2f5f3c'), tleaf: C('#7a6a55'), thatch: C('#bf9a55') },
 };
 const FIXED = {
-  dirt: C('#8a5d3b'), stone: C('#8d8f93'), sand: C('#dccb8e'), path: C('#ab9c80'), log: C('#6b4a2e'), logTop: C('#9c7a52'),
-  mud: C('#e9dfc8'), plank: C('#b98a53'), cobble: C('#7b7b7d'), mlog: C('#5e4128'), tlog: C('#5b3b24'), tlogTop: C('#7d5a3a'),
+  dirt: C('#8a5d3b'), stone: C('#948c7e'), sand: C('#dccb8e'), path: C('#ab9c80'), log: C('#6b4a2e'), logTop: C('#9c7a52'),
+  mud: C('#ece0c6'), plank: C('#b98a53'), cobble: C('#8b8172'), mlog: C('#5e4128'), tlog: C('#5b3b24'), tlogTop: C('#7d5a3a'),
   snow: C('#f2f6fa'), autumnYellow: C('#e8c23a'),
 };
 const SNOW_LINE = { spring: 25, summer: 99, autumn: 27, winter: -99 };
@@ -423,6 +495,7 @@ function faceColor(t, dir, y, v, season, out) {
     case T.MUD: out.copy(FIXED.mud); break;
     case T.PLANK: out.copy(FIXED.plank); break;
     case T.THATCH: out.copy(p.thatch); break;
+    case T.RIDGE: out.copy(p.thatch).multiplyScalar(0.78); break;
     case T.COBBLE: out.copy(FIXED.cobble); break;
     case T.MLOG: out.copy(FIXED.mlog); break;
     case T.TLOG: out.copy(dir === 2 || dir === 3 ? FIXED.tlogTop : FIXED.tlog); break;

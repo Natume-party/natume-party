@@ -213,7 +213,7 @@ for (const w of W.windows) {
 
 const plankTex = tileTexture(TILE_ID.PLANK);
 const doorPivot = new THREE.Group();
-doorPivot.position.set(W.door.x - 0.5, 1.5 - 0.5 / V, W.door.z + 0.38);
+doorPivot.position.set(W.door.x - 0.5, 1.5, W.door.z + 0.1);
 const door = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 0.16), new THREE.MeshLambertMaterial({ map: plankTex, color: 0x9a6a40 }));
 door.position.x = 0.5;
 door.castShadow = true;
@@ -615,6 +615,7 @@ const COL = {
   rainDay: new THREE.Color('#8d97a3'), rainNight: new THREE.Color('#1d222b'),
   sunWarm: new THREE.Color('#ffc58f'), sunWhite: new THREE.Color('#fff6e8'), moon: new THREE.Color('#a9bbff'),
   glass: new THREE.Color('#a8d4e6'), glow: new THREE.Color('#ffc861'), lanternOff: new THREE.Color('#8a7a5a'),
+  ambDay: new THREE.Color('#6d6353'), ambNight: new THREE.Color('#2f3a66'),
   cloudDay: new THREE.Color('#ffffff'), cloudNight: new THREE.Color('#2c3350'), cloudRain: new THREE.Color('#7b838f'), cloudDusk: new THREE.Color('#ffc2a8'),
   rainLineDay: new THREE.Color('#c0d2e4'), rainLineNight: new THREE.Color('#4a586c'),
 };
@@ -654,7 +655,9 @@ function updateSky(hour) {
   hemi.groundColor.set(0x7d8462);
   hemi.intensity = (0.4 + 0.8 * day) * (state.rain ? 0.8 : 1);
   // 阴影里留一点底光，不然墙面在低角度太阳下会糊成一片黑
-  ambient.intensity = 0.14 + 0.5 * (1 - day) + 0.45 * dusk;
+  ambient.intensity = 0.17 + 0.5 * (1 - day) + 0.45 * dusk;
+  // 白天补光偏暖：草泥墙在影子里别被天光染成蓝灰
+  ambient.color.copy(COL.ambDay).lerp(COL.ambNight, 1 - day);
 
   const R_SKY = 450;
   sunMesh.position.copy(sunDir).multiplyScalar(R_SKY);
