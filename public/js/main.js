@@ -467,7 +467,22 @@ for (let i = 0; i < 8; i++) {
 // ---------- 天空：渐变穹顶、方块太阳和月亮、星星 ----------
 const skyGroup = new THREE.Group();
 scene.add(skyGroup);
-const skyUniforms = { top: { value: new THREE.Color() }, bottom: { value: new THREE.Color() } };
+const glowTex = (() => {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 128;
+  const g = cv.getContext('2d');
+  const grd = g.createRadialGradient(64, 64, 6, 64, 64, 64);
+  grd.addColorStop(0, 'rgba(255,255,255,0.95)');
+  grd.addColorStop(0.22, 'rgba(255,246,220,0.5)');
+  grd.addColorStop(0.55, 'rgba(255,236,200,0.15)');
+  grd.addColorStop(1, 'rgba(255,232,190,0)');
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+})();
+const skyUniforms = { top: { value: new THREE.Color() }, mid: { value: new THREE.Color() }, bottom: { value: new THREE.Color() } };
 const skyDome = new THREE.Mesh(
   new THREE.SphereGeometry(600, 32, 16),
   new THREE.ShaderMaterial({
@@ -482,6 +497,10 @@ skyGroup.add(skyDome);
 const sunMesh = new THREE.Mesh(new THREE.PlaneGeometry(34, 34), new THREE.MeshBasicMaterial({ color: 0xfff0b0, fog: false, transparent: true, depthWrite: false }));
 const moonMesh = new THREE.Mesh(new THREE.PlaneGeometry(22, 22), new THREE.MeshBasicMaterial({ color: 0xe8eef8, fog: false, transparent: true, depthWrite: false }));
 skyGroup.add(sunMesh, moonMesh);
+// 日月光晕：给天空一点层次，别只是一块渐变色
+const sunGlow = new THREE.Mesh(new THREE.PlaneGeometry(190, 190), new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+const moonGlow = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, opacity: 0, color: 0xcfe0ff, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+skyGroup.add(sunGlow, moonGlow);
 const starGeo = new THREE.BufferGeometry();
 {
   const p = [];
@@ -633,7 +652,7 @@ const FLOWER = {
 };
 const FLOWER_SHOW = { spring: 1, summer: 0.75, autumn: 0.35, winter: 0 };
 const REED = { spring: '#6f9e45', summer: '#5f8f3a', autumn: '#b59a52', winter: '#c9b98a' };
-const WATER_COL = { spring: '#4a9fd8', summer: '#3d93cf', autumn: '#3b84bd', winter: '#d3e9f2' };
+const WATER_COL = { spring: '#3f8f86', summer: '#2f7f78', autumn: '#336f72', winter: '#cfe3e8' };
 
 function applySeason() {
   const s = state.season;
@@ -711,6 +730,7 @@ function updateSky(hour) {
   }
   skyUniforms.top.value.copy(top);
   skyUniforms.bottom.value.copy(bottom);
+  skyUniforms.mid.value.copy(bottom).lerp(top, 0.55);
   scene.fog.color.copy(bottom);
   scene.fog.near = state.rain ? 40 : 70;
   scene.fog.far = state.rain ? 150 : 230;
@@ -727,7 +747,7 @@ function updateSky(hour) {
   hemi.groundColor.set(0x7d8462);
   hemi.intensity = (0.4 + 0.8 * day) * (state.rain ? 0.8 : 1);
   // 阴影里留一点底光，不然墙面在低角度太阳下会糊成一片黑
-  ambient.intensity = 0.17 + 0.62 * (1 - day) + 0.45 * dusk;
+  ambient.intensity = 0.16 + 0.44 * (1 - day) + 0.45 * dusk;
   // 白天补光偏暖：草泥墙在影子里别被天光染成蓝灰
   ambient.color.copy(COL.ambDay).lerp(COL.ambNight, 1 - day);
 
@@ -737,6 +757,12 @@ function updateSky(hour) {
   sunMesh.lookAt(0, 0, 0);
   moonMesh.lookAt(0, 0, 0);
   sunMesh.material.opacity = state.rain ? 0.15 : smoothstep(-0.08, 0.02, sy);
+  sunGlow.position.copy(sunDir).multiplyScalar(R_SKY - 40);
+  moonGlow.position.copy(sunDir).multiplyScalar(-(R_SKY - 40));
+  sunGlow.lookAt(0, 0, 0);
+  moonGlow.lookAt(0, 0, 0);
+  sunGlow.material.opacity = sunMesh.material.opacity * 0.8;
+  moonGlow.material.opacity = moonMesh.material.opacity * 0.45;
   moonMesh.material.opacity = state.rain ? 0.1 : smoothstep(-0.08, 0.02, -sy) * 0.95;
   starMat.opacity = state.rain ? 0 : (1 - day) * 0.9;
 

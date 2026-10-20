@@ -4,7 +4,7 @@ import * as THREE from 'three';
 export const T = {
   AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, SAND: 4, PATH: 5, LOG: 6, MUD: 7, PLANK: 8,
   THATCH: 9, COBBLE: 10, MLOG: 11, LEAF_A: 12, LEAF_B: 13, LEAF_C: 14, TLOG: 15, TLEAF: 16, WATER: 17,
-  RIDGE: 18,
+  RIDGE: 18, WETSAND: 19,
 };
 
 // 细分倍数：1 个原方块 = V^3 个小方块，世界尺寸不变。
@@ -156,7 +156,7 @@ export function generateWorld() {
         if (depth === 0) {
           if (river) t = T.SAND;
           else if (isPath(xw, zw)) t = T.PATH;
-          else if (h <= 0 && rd < RIVER_HALF + 1.3) t = T.SAND;
+          else if (h <= 0 && rd < RIVER_HALF + 1.3) t = rd < RIVER_HALF + 0.55 ? T.WETSAND : T.SAND;
           else if (steep || rocky) t = T.STONE;
           else t = T.GRASS;
         // 草层保持约 1 个世界单位厚：台阶侧壁才不会被土色切成一圈圈横纹
@@ -656,6 +656,7 @@ function tileFor(t, dir) {
     case T.GRASS: return dir === 2 ? TILE_ID.GRASS : TILE_ID.NOISE;
     case T.STONE: case T.COBBLE: return TILE_ID.STONE;
     case T.PATH: return TILE_ID.GRAVEL;
+    case T.WETSAND: return TILE_ID.GRAVEL;
     case T.LOG: case T.MLOG: case T.TLOG: return top ? TILE_ID.LOGTOP : TILE_ID.LOG;
     case T.MUD: return TILE_ID.MUD;
     case T.PLANK: return TILE_ID.PLANK;
@@ -674,9 +675,9 @@ const PALETTE = {
   winter: { grass: C('#eef3f7'), leafA: C('#7a6a55'), leafB: C('#7a6a55'), leafC: C('#2f5f3c'), tleaf: C('#7a6a55'), thatch: C('#bf9a55') },
 };
 const FIXED = {
-  dirt: C('#8a5d3b'), stone: C('#948c7e'), sand: C('#dccb8e'), path: C('#ab9c80'), log: C('#6b4a2e'), logTop: C('#9c7a52'),
+  dirt: C('#8a5d3b'), stone: C('#948c7e'), sand: C('#d9c592'), path: C('#ab9c80'), log: C('#6b4a2e'), logTop: C('#9c7a52'),
   mud: C('#ece0c6'), plank: C('#b98a53'), cobble: C('#8b8172'), mlog: C('#5e4128'), tlog: C('#7b5a3f'), tlogTop: C('#8c6742'),
-  snow: C('#f2f6fa'), autumnYellow: C('#e8c23a'),
+  snow: C('#f2f6fa'), autumnYellow: C('#e8c23a'), wetsand: C('#b0925f'),
 };
 const SNOW_LINE = { spring: 25, summer: 99, autumn: 27, winter: -99 };
 
@@ -691,6 +692,7 @@ function faceColor(t, dir, y, v, season, out) {
     case T.DIRT: out.copy(FIXED.dirt); break;
     case T.STONE: out.copy(FIXED.stone); break;
     case T.SAND: out.copy(FIXED.sand); break;
+    case T.WETSAND: out.copy(FIXED.wetsand); break;
     case T.PATH: out.copy(FIXED.path); break;
     case T.LOG: out.copy(dir === 2 || dir === 3 ? FIXED.logTop : FIXED.log); break;
     case T.MUD: out.copy(FIXED.mud); break;
