@@ -442,11 +442,11 @@ export function generateWorld() {
 
   // 冠簇：五团分离的球，彼此留缝
   const clusters = [
-    { x: tbx - W3(2.5), y: W3(7.1), z: tbz + W3(1.4), r: 6 },
-    { x: tbx + W3(2.6), y: W3(7.2), z: tbz - W3(1.5), r: 6 },
-    { x: tbx + W3(0.3), y: W3(8.2), z: tbz + W3(2.0), r: 5 },
-    { x: tbx + W3(0.1), y: W3(8.3), z: tbz - W3(0.2), r: 6 },
-    { x: tbx - W3(1.4), y: W3(7.6), z: tbz - W3(2.4), r: 5 },
+    { x: tbx - W3(2.1), y: W3(7.2), z: tbz + W3(1.2), r: 7 },
+    { x: tbx + W3(2.2), y: W3(7.3), z: tbz - W3(1.3), r: 7 },
+    { x: tbx + W3(0.3), y: W3(8.0), z: tbz + W3(1.7), r: 6 },
+    { x: tbx + W3(0.1), y: W3(8.2), z: tbz - W3(0.2), r: 7 },
+    { x: tbx - W3(1.3), y: W3(7.5), z: tbz - W3(2.0), r: 6 },
   ];
   const leafCells = [];
   for (const c of clusters) {
@@ -457,7 +457,7 @@ export function generateWorld() {
       const x = c.x + dx, y = c.y + dy, z = c.z + dz;
       if (grid.get(x, y, z)) continue;
       // 边缘多挖一点，剪影才不像一个整球
-      if (e > 0.55 && hash3(x, y, z) < 0.22) continue;
+      if (e > 0.55 && hash3(x, y, z) < 0.16) continue;
       grid.set(x, y, z, T.TLEAF);
       leafCells.push({ x, y, z, e, cy: c.y, R });
     }
