@@ -317,19 +317,23 @@ export function generateWorld() {
     }
   }
 
-  // ---- 杂草：成片的长草（位置导出，main.js 用实例化画）----
+  // ---- V3.1 草甸：斑块生长，降低粗糙重复的草丛密度 ----
   const tufts = [];
-  for (let i = 0; i < 5200 && tufts.length < 1080; i++) {
-    const a = rng() * Math.PI * 2, r = 3.5 + Math.sqrt(rng()) * 19;
+  for (let i = 0; i < 7600 && tufts.length < 460; i++) {
+    const a = rng() * Math.PI * 2, r = 4.2 + Math.sqrt(rng()) * 23.5;
     const xw = Math.cos(a) * r, zw = Math.sin(a) * r;
-    if (fbm(xw * 0.32 + 2, zw * 0.32 - 5) < 0.4) continue;
+    const patch = fbm(xw * 0.19 + 2, zw * 0.19 - 5);
+    if (patch < 0.51 || rng() > 0.48 + (patch - 0.51) * 1.5) continue;
     const xb = Math.round(xw * V), zb = Math.round(zw * V);
     const h = getH(xb, zb);
     if (h !== 0 || grid.get(xb, 0, zb) !== T.GRASS || grid.get(xb, 1, zb)) continue;
-    if (Math.abs(zw - riverZ(xw)) < RIVER_HALF + 0.7) continue;
-    if (isPath(xw, zw)) continue;
-    if (rectDist(HUT_ZONE, xw, zw) < 0.7 || rectDist(TREE_ZONE, xw, zw) < 0.9) continue;
-    tufts.push({ x: xw, z: zw, y: h / V, s: 0.65 + rng() * 0.7, rot: rng() * 3.14, v: rng() });
+    const rd = Math.abs(zw - riverZ(xw));
+    if (rd < RIVER_HALF + 1.5 || isPath(xw, zw)) continue;
+    if (rectDist(HUT_ZONE, xw, zw) < 1.8 || rectDist(TREE_ZONE, xw, zw) < 1.65) continue;
+    // 桥边留出轮廓清晰的步道
+    if (xw > PATH_X0 - 3 && xw < PATH_X1 + 3 && rd < RIVER_HALF + 5) continue;
+    tufts.push({ x: xw, z: zw, y: h / V, s: 0.69 + rng() * 0.48,
+      rot: rng() * Math.PI * 2, v: rng(), n: 2 + Math.floor(rng() * 3) });
   }
 
   // ---- 河岸：浮萍 + 倒木 ----

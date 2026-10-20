@@ -414,38 +414,47 @@ flowerOrder.forEach((f, i) => {
 });
 scene.add(stemMesh, petalMesh);
 
-// ---------- 杂草与浮萍 ----------
-const GROUND_Y = 0.5 / V;            // 草地方块顶面（世界单位）。之前按 0 放，草叶有一半埋在地下
+// ---------- V3.1 轻薄渐尖草叶：不再用厚盒状模型 ----------
+const GROUND_Y = 0.5 / V;
 const TUFT_COLORS = {
-  spring: ['#69bd47', '#7fcd5b', '#55a93c'],
-  summer: ['#3f8a32', '#4f9a3a', '#377a2c'],
-  autumn: ['#a2953c', '#b7a548', '#8f8534'],
-  winter: ['#cfd8cf', '#c2cdc6', '#d8ded6'],
+  spring: ['#83a977', '#a3be8c', '#729b7b', '#b4be84'],
+  summer: ['#658c62', '#819b75', '#527d65', '#9ca779'],
+  autumn: ['#a19658', '#aea36c', '#8f8b57', '#b0a277'],
+  winter: ['#ced5cc', '#bfcac1', '#d8ddd1', '#bdc5bd'],
 };
+const grassGeo = new THREE.BufferGeometry();
+grassGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+  -0.045,0,0,   0.045,0,0,
+  -0.035,0.12,0.01,  0.035,0.12,0.01,
+  -0.017,0.27,0.048, 0.014,0.27,0.048,
+  0,0.34,0.065,
+], 3));
+grassGeo.setIndex([0,1,2, 1,3,2, 2,3,4, 3,5,4, 4,5,6]);
+grassGeo.computeVertexNormals();
 const TUFT_N = W.tufts.length;
-const BLADES = 5;
-const tuftMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.15, 0.46, 0.03), new THREE.MeshLambertMaterial(), TUFT_N * BLADES);
+const BLADES_MAX = 4;
+const tuftMesh = new THREE.InstancedMesh(grassGeo,
+  new THREE.MeshLambertMaterial({ side: THREE.DoubleSide }), Math.max(1, TUFT_N * BLADES_MAX));
 tuftMesh.frustumCulled = false;
+tuftMesh.castShadow = false;
 scene.add(tuftMesh);
-const tuftSeed = new Float32Array(TUFT_N * BLADES);
-W.tufts.forEach((t, i) => {
-  for (let k = 0; k < BLADES; k++) {
-    const j = i * BLADES + k;
-    const a = t.rot + k * 1.2566;
-    const lean = 0.42 + (k % 2) * 0.16;
-    const hh = 0.46 * t.s * (0.82 + k * 0.09);
-    dummy.position.set(
-      t.x + Math.cos(a) * 0.12,
-      GROUND_Y + hh * 0.5 - 0.03,
-      t.z + Math.sin(a) * 0.12,
-    );
-    dummy.rotation.set(Math.sin(a) * lean, a, -Math.cos(a) * lean);
-    dummy.scale.set(1, hh / 0.46, 1);
+const tuftSeeds = [];
+W.tufts.forEach((t) => {
+  for (let k = 0; k < t.n; k++) {
+    const j = tuftSeeds.length;
+    const a = t.rot + k * (Math.PI * 2 / t.n) + (t.v - 0.5) * 0.15;
+    const height = (0.18 + 0.14 * ((t.v * 3.31 + k * 0.47) % 1)) * t.s;
+    dummy.position.set(t.x + Math.cos(a) * 0.075, GROUND_Y - 0.013,
+      t.z + Math.sin(a) * 0.075);
+    dummy.rotation.set(Math.sin(a) * 0.2, a, -Math.cos(a) * 0.2);
+    dummy.scale.set(0.74 + 0.2 * t.v, height / 0.34, 1);
     dummy.updateMatrix();
     tuftMesh.setMatrixAt(j, dummy.matrix);
-    tuftSeed[j] = (t.v + k * 0.37) % 1;
+    tuftSeeds.push((t.v + k * 0.29) % 1);
   }
 });
+const TUFT_INSTANCE_COUNT = tuftSeeds.length;
+tuftMesh.count = TUFT_INSTANCE_COUNT;
 tuftMesh.instanceMatrix.needsUpdate = true;
 
 const lilyMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.42, 0.04, 0.42), new THREE.MeshLambertMaterial({ color: 0x5f9440 }), Math.max(1, W.lilies.length));
@@ -790,11 +799,11 @@ function applySeason() {
   }
   // 草叶跟着季节换色；冬天被雪盖住就收起来
   const tp = TUFT_COLORS[s] || TUFT_COLORS.summer;
-  for (let j = 0; j < TUFT_N * BLADES; j++) {
-    tuftMesh.setColorAt(j, tmpColor.set(tp[Math.floor(tuftSeed[j] * tp.length)]));
+  for (let j = 0; j < TUFT_INSTANCE_COUNT; j++) {
+    tuftMesh.setColorAt(j, tmpColor.set(tp[Math.floor(tuftSeeds[j] * tp.length)]));
   }
   if (tuftMesh.instanceColor) tuftMesh.instanceColor.needsUpdate = true;
-  tuftMesh.count = s === 'winter' ? 0 : TUFT_N * BLADES;
+  tuftMesh.count = s === 'winter' ? 0 : TUFT_INSTANCE_COUNT;
 
   const shown = Math.round(flowerOrder.length * FLOWER_SHOW[s]);
   petalMesh.count = stemMesh.count = shown;
