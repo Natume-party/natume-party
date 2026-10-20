@@ -1551,3 +1551,22 @@ window.__natume = {
   quality: () => quality,
   modelQA: W.modelQA,
 };
+
+// 仅在 ?qa=1 时向 DOM 暴露非敏感的几何验收数据，供云端浏览器直接读取。
+// 中心线归零还不够：必须同时确认窗洞不被框架覆盖、树冠可点按。
+if (params.get('qa') === '1') {
+  const qa = W.modelQA;
+  const checks = {
+    doorCentered: qa.doorCenterError === 0,
+    frontWindowsMirrored: qa.frontWindowMirrorError === 0,
+    sideWindowsAligned: qa.sideWindowAlignError === 0,
+    windowsUnobstructed: qa.totalWindowObstructions === 0,
+    treeCanopyTouchableAtTop: qa.treeHitTopMargin >= 0.45,
+  };
+  const output = document.createElement('output');
+  output.id = 'natume-model-qa';
+  output.hidden = true;
+  output.dataset.pass = String(Object.values(checks).every(Boolean));
+  output.textContent = JSON.stringify({ checks, qa });
+  document.body.appendChild(output);
+}
