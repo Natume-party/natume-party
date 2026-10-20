@@ -91,19 +91,24 @@ function baseHeight(x, z) {
   const d = Math.hypot(x, z);
   let h = 0;
   const hills = fbm(x * 0.07 + 31, z * 0.07 - 17);
-  h += Math.max(0, hills - 0.5) * 9 * smoothstep(16, 26, d);
-  if (d > 26) {
+  h += Math.max(0, hills - 0.5) * 7 * smoothstep(16, 26, d);
+  // 出谷的坡要缓：原来 0.18~0.52 的抬升会把四周糊成一圈高墙，天空全被挡掉
+  if (d > 30) {
     const m = fbm(x * 0.05 + 7, z * 0.05 + 3);
     const ridge = 1 - Math.abs(fbm(x * 0.09 - 5, z * 0.09 + 9) * 2 - 1);
-    h += (d - 26) * (0.18 + m * 0.34) + ridge * 4 * smoothstep(26, 40, d);
+    h += (d - 30) * (0.055 + m * 0.115) + ridge * 2.0 * smoothstep(30, 44, d);
   }
-  // 几座明确的远山：给远景主峰，而不是一圈均匀的碗边
-  const peaks = [[-30, -36, 28, 13], [20, -40, 32, 14], [38, 10, 22, 11], [-38, 14, 20, 11]];
+  // 最外圈抬一点挡住地图边界，但不是均匀一圈：留几处低地，
+  // 视线越过山脊能看到远景剪影（否则四周会糊成一道等高墙）
+  const gapMask = smoothstep(0.3, 0.66, fbm(x * 0.042 + 5, z * 0.042 - 2));
+  h += (1.0 + 3.8 * gapMask) * smoothstep(42, 55, d) * (0.72 + 0.5 * fbm(x * 0.11 + 21, z * 0.11 - 13));
+  // 近处这几座只当「山脚」：真正的高山交给远景剪影层，否则永远会把画面堵死
+  const peaks = [[-33, -30, 8.5, 14], [24, -36, 10, 16], [40, -4, 6, 11], [-41, -2, 5.5, 11], [-8, -45, 7.5, 12]];
   for (const [px, pz, ph, pr] of peaks) {
     const dd = Math.hypot(x - px, z - pz);
     if (dd > pr * 2.4) continue;
     const bump = Math.exp(-(dd * dd) / (pr * pr));
-    h += ph * bump * (0.82 + 0.36 * fbm(x * 0.11 + px, z * 0.11 + pz));
+    h += ph * bump * (0.86 + 0.28 * fbm(x * 0.11 + px, z * 0.11 + pz));
   }
   return h;
 }
@@ -160,17 +165,22 @@ export function generateWorld() {
         minN = Math.min(minN, n === -99 ? YMIN : n);
       }
       const steep = h - minN >= 3 * V && h > 4 * V;
-      const rocky = h > (11 + fbm(xw * 0.2, zw * 0.2) * 7) * V || h > 26 * V;
+      // 裸岩线：两条噪声叠出参差的分界，免得山腰上出现一条水平的灰色横切线
+      const rockLine = (11.5 + fbm(xw * 0.13 + 3, zw * 0.13 - 8) * 3.2) * V;
+      const rocky = h > rockLine;
       // 山脚碎石带：坡刚起来、高度还不高的一圈，露出碎石和裸土
-      const foot = !river && h > 0 && h <= 5 * V && (h - minN) >= 1.5 * V
-        && fbm(xw * 0.42 + 6, zw * 0.42 - 3) > 0.4;
+      const foot = !river && h > 0 && h <= 7 * V && (h - minN) >= 1.2 * V
+        && fbm(xw * 0.42 + 6, zw * 0.42 - 3) > 0.42;
       for (let yb = YMIN + 1; yb <= h; yb++) {
         const depth = h - yb;
         let t;
         if (depth === 0) {
           if (river) t = T.SAND;
           else if (isPath(xw, zw)) t = T.PATH;
-          else if (h <= 0 && rd < RIVER_HALF + 1.3) t = rd < RIVER_HALF + 0.55 ? T.WETSAND : T.SAND;
+          // 岸线用噪声推一下：等宽的一条浅色带看着像水泥路缘
+          else if (h <= 0 && rd < RIVER_HALF + 0.5 + fbm(xw * 0.75 + 2, zw * 0.75 - 6) * 0.95) {
+            t = rd < RIVER_HALF + 0.28 + fbm(xw * 1.3, zw * 1.3) * 0.3 ? T.WETSAND : T.SAND;
+          }
           else if (steep || rocky) t = T.STONE;
           else if (foot) t = T.SCREE;
           else t = T.GRASS;
@@ -215,15 +225,24 @@ export function generateWorld() {
       else if (!grid.get(xb, h + 2, zEdge)) grid.set(xb, h + 2, zEdge, T.MLOG);
     }
   }
-  // 稻草人：立在田角
+  // 稻草人：一捆稻草 + 草帽，别只剩一根杆子顶个白方块（远看像墓碑）
   {
     const sx = fx1 - 2, sz = fz0 + 2;
     const h = getH(sx, sz);
     if (h >= 0) {
-      for (let k = 1; k <= 4; k++) grid.set(sx, h + k, sz, T.MLOG);
-      for (let dx = -1; dx <= 1; dx++) grid.set(sx + dx, h + 3, sz, T.MLOG);
-      grid.set(sx, h + 5, sz, T.MUD);          // 布头
-      grid.set(sx, h + 6, sz, T.THATCH);       // 草帽
+      const half = Math.max(1, Math.floor(V / 2));
+      const b0 = Math.round(1.3 * V), b1 = b0 + Math.round(1.4 * V);
+      const armY = b1 - 1, headY = b1 + 1, hatY = headY + 1;
+      for (let k = 1; k < b0; k++) grid.set(sx, h + k, sz, T.MLOG);
+      for (let dx = -half; dx <= half; dx++) for (let dz = -half; dz <= half; dz++) {
+        for (let k = b0; k <= b1; k++) grid.set(sx + dx, h + k, sz + dz, T.THATCH);
+      }
+      for (let dx = -2 * V; dx <= 2 * V; dx++) if (Math.abs(dx) > half) grid.set(sx + dx, h + armY, sz, T.MLOG);
+      grid.set(sx, h + headY, sz, T.MUD);
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+        if (Math.abs(dx) + Math.abs(dz) > 1) continue;
+        grid.set(sx + dx, h + hatY, sz + dz, T.THATCH);
+      }
     }
   }
   // 草垛
@@ -288,18 +307,19 @@ export function generateWorld() {
   // ---- 河里的踏脚石 ----
   for (let x = -24; x <= 24; x++) {
     for (const side of [-1, 1]) {
-      if (rng() > 0.2) continue;
-      const z = riverZ(x) + side * (RIVER_HALF - 0.2 - rng() * 0.5);
+      if (rng() > 0.11) continue;
+      const z = riverZ(x) + side * (RIVER_HALF - 0.65 - rng() * 0.6);
       const xb = Math.round(x * V), zb = Math.round(z * V);
+      // 放在水面那一层：露头一点点，才是踏脚石，砌到 2 格就成了一排系船柱
       if (grid.get(xb, 1, zb)) continue;
-      grid.set(xb, 1, zb, T.STONE);
-      if (rng() < 0.45) grid.set(xb, 2, zb, T.STONE);
+      grid.set(xb, 0, zb, T.STONE);
+      if (rng() < 0.3) grid.set(xb + 1, 0, zb, T.STONE);
     }
   }
 
   // ---- 杂草：成片的长草（位置导出，main.js 用实例化画）----
   const tufts = [];
-  for (let i = 0; i < 4200 && tufts.length < 820; i++) {
+  for (let i = 0; i < 5200 && tufts.length < 1080; i++) {
     const a = rng() * Math.PI * 2, r = 3.5 + Math.sqrt(rng()) * 19;
     const xw = Math.cos(a) * r, zw = Math.sin(a) * r;
     if (fbm(xw * 0.32 + 2, zw * 0.32 - 5) < 0.4) continue;
@@ -356,14 +376,16 @@ export function generateWorld() {
     for (let zw = -46; zw <= 46; zw++) {
       const d = Math.hypot(xw, zw);
       // 近景留白：太靠近默认机位的树会挡住小屋
-      if (d < 23 || d > 44) continue;
+      if (d < 23 || d > 50) continue;
       // 低频噪声决定疏密：有林子和空地，而不是均匀撒点
-      const patch = fbm(xw * 0.055 + 12, zw * 0.055 - 7);
-      if (rng() > 0.012 + patch * 0.06) continue;
+      // 成片而不是均匀撒点：噪声高的地方长林子，低的地方留空草地
+      const patch = fbm(xw * 0.062 + 12, zw * 0.062 - 7);
+      if (patch < 0.47) continue;
+      if (rng() > (patch - 0.47) * 0.26) continue;
       const jx = xw + (rng() - 0.5) * 0.9, jz = zw + (rng() - 0.5) * 0.9;
       const xb = Math.round(jx * V), zb = Math.round(jz * V);
       const h = getH(xb, zb);
-      if (h < 0 || h > 30 * V) continue;
+      if (h < 0 || h > 11 * V) continue;
       if (Math.abs(jz - riverZ(jx)) < RIVER_HALF + 2.5) continue;
       if (rectDist(HUT_ZONE, jx, jz) < 3 || rectDist(TREE_ZONE, jx, jz) < 3) continue;
       if (grid.get(xb, h, zb) !== T.GRASS) continue;
@@ -372,14 +394,14 @@ export function generateWorld() {
     }
   }
 
-  for (const site of sites.slice(0, 34)) {
+  for (const site of sites.slice(0, 30)) {
     const { xb, zb, h } = site;
     const kind = rng();
-    const pine = site.alt > 13 || (site.alt > 9 && kind < 0.45);
-    const slim = !pine && kind > 0.74;
+    const pine = site.alt > 8 || (site.alt > 5 && kind < 0.45);
+    const slim = !pine && kind > 0.8;
     const leaf = pine ? T.LEAF_C : kind < 0.4 ? T.LEAF_A : T.LEAF_B;
     const sc = 0.85 + rng() * 0.45;
-    const trunkH = Math.max(2 * V, Math.round((pine ? 3.2 : 2.6) * sc * V));
+    const trunkH = Math.max(2 * V, Math.round((pine ? 2.9 : 2.2) * sc * V));
     for (let y = 1; y <= trunkH; y++) {
       const wide = y <= Math.ceil(trunkH * 0.35);
       const n = wide ? Math.max(2, Math.round(V / 2)) : 1;
@@ -387,26 +409,27 @@ export function generateWorld() {
     }
     const top = h + trunkH;
     if (pine) {
-      // 松：四层收窄的锥
-      for (let L = 0; L < 4; L++) {
-        const r = Math.max(2, (3.4 - L * 0.7) * sc * (V / 2));
-        blob(xb, top + Math.round(L * 0.85 * V), zb, r, Math.max(1, r * 0.62), r, leaf, 0.16);
+      // 松：五层收窄的锥，逐层缩，别叠成一串球
+      for (let L = 0; L < 5; L++) {
+        const r = Math.max(2, (2.9 - L * 0.46) * sc * (V / 2));
+        blob(xb, top + Math.round(L * 0.7 * V), zb, r, Math.max(1, r * 0.55), r, leaf, 0.14);
       }
     } else if (slim) {
       // 细高（杨树感）
-      const r = Math.max(2, 1.55 * sc * (V / 2));
-      blob(xb, top + Math.round(1.6 * V), zb, r, 3.1 * sc * (V / 2), r, leaf, 0.2);
+      const r = Math.max(2, 1.5 * sc * (V / 2));
+      blob(xb, top + Math.round(1.7 * V), zb, r, 3.0 * sc * (V / 2), r, leaf, 0.18);
     } else {
-      // 阔叶：两三个团簇错开
-      const n = 2 + (rng() < 0.5 ? 1 : 0);
+      // 阔叶：冠幅要明显大于树高，才不是「棒棒糖」
+      const n = 3 + (rng() < 0.5 ? 1 : 0);
+      const baseR = (3.0 + rng() * 0.9) * sc * (V / 2);
       for (let i = 0; i < n; i++) {
-        const a = (i / n) * Math.PI * 2 + rng() * 0.8;
-        const r = Math.max(2, (2.3 + rng() * 0.7) * sc * (V / 2));
+        const a = (i / n) * Math.PI * 2 + rng() * 0.9;
+        const r = Math.max(2, baseR * (0.72 + rng() * 0.45));
         blob(
-          xb + Math.round(Math.cos(a) * 0.8 * V),
-          top + Math.round((1.1 + rng() * 0.8) * V),
-          zb + Math.round(Math.sin(a) * 0.8 * V),
-          r, r * 0.82, r, leaf, 0.22,
+          xb + Math.round(Math.cos(a) * 1.15 * sc * V),
+          top + Math.round((0.9 + rng() * 1.1) * V),
+          zb + Math.round(Math.sin(a) * 1.15 * sc * V),
+          r, r * 0.7, r, leaf, 0.24,
         );
       }
     }
@@ -615,16 +638,18 @@ export function generateWorld() {
       }
     }
   };
-  // 主干：细一点、带一点倾斜
-  limb(tbx, 0, tbz, tbx + W3(0.22), W3(1.9), tbz + W3(0.08), 1.9, 1.5);
-  limb(tbx + W3(0.22), W3(1.75), tbz + W3(0.08), tbx + W3(0.42), W3(3.5), tbz + W3(0.16), 1.5, 1.15);
+  // 半径按细分倍数折算：V=2 时同样的「块数」会粗出 1.5 倍，树干会胖成一堵墙
+  const TR = V / 3;
+  // 主干：带一点倾斜
+  limb(tbx, 0, tbz, tbx + W3(0.22), W3(1.9), tbz + W3(0.08), 1.9 * TR, 1.5 * TR);
+  limb(tbx + W3(0.22), W3(1.75), tbz + W3(0.08), tbx + W3(0.42), W3(3.5), tbz + W3(0.16), 1.5 * TR, 1.15 * TR);
   // 三条主枝
-  limb(tbx + W3(0.3), W3(2.9), tbz + W3(0.1), tbx - W3(1.4), W3(6.2), tbz + W3(0.9), 1.25, 0.8);
-  limb(tbx + W3(0.3), W3(3.1), tbz + W3(0.1), tbx + W3(1.5), W3(6.4), tbz - W3(1.0), 1.25, 0.8);
-  limb(tbx + W3(0.3), W3(3.2), tbz + W3(0.1), tbx + W3(0.2), W3(6.6), tbz + W3(1.5), 1.25, 0.8);
+  limb(tbx + W3(0.3), W3(2.9), tbz + W3(0.1), tbx - W3(1.4), W3(6.2), tbz + W3(0.9), 1.25 * TR, 0.8 * TR);
+  limb(tbx + W3(0.3), W3(3.1), tbz + W3(0.1), tbx + W3(1.5), W3(6.4), tbz - W3(1.0), 1.25 * TR, 0.8 * TR);
+  limb(tbx + W3(0.3), W3(3.2), tbz + W3(0.1), tbx + W3(0.2), W3(6.6), tbz + W3(1.5), 1.25 * TR, 0.8 * TR);
   // 二级小枝
-  limb(tbx - W3(1.4), W3(6.2), tbz + W3(0.9), tbx - W3(2.4), W3(7.2), tbz + W3(1.8), 0.7, 0.5);
-  limb(tbx + W3(1.5), W3(6.4), tbz - W3(1.0), tbx + W3(2.5), W3(7.4), tbz - W3(1.8), 0.7, 0.5);
+  limb(tbx - W3(1.4), W3(6.2), tbz + W3(0.9), tbx - W3(2.4), W3(7.2), tbz + W3(1.8), 0.7 * TR, 0.5 * TR);
+  limb(tbx + W3(1.5), W3(6.4), tbz - W3(1.0), tbx + W3(2.5), W3(7.4), tbz - W3(1.8), 0.7 * TR, 0.5 * TR);
 
   // 冠簇：五团分离的球，彼此留缝
   const clusters = [
@@ -684,20 +709,24 @@ export function generateWorld() {
     if (Math.hypot(x - tb.x, z - tb.z) < 2) continue;
     groundFlowers.push({ x, z, c: rng(), s: 0.7 + rng() * 0.5, v: rng() });
   }
+  // 芦苇：成丛长，不要沿河一根一根排成栅栏
   const reeds = [];
-  for (let x = -26; x <= 26; x++) {
+  for (let x = -25; x <= 25; x += 1.2 + rng() * 3.4) {
     for (const side of [-1, 1]) {
-      if (rng() > 0.26) continue;
-      if (x >= PATH_X0 - 1 && x <= PATH_X1 + 1) continue;
-      // 一丛 2-5 根，高矮不一，别像插了一排杆子
-      const n = 2 + Math.floor(rng() * 4);
+      if (rng() > 0.66) continue;
+      if (x >= PATH_X0 - 1.2 && x <= PATH_X1 + 1.2) continue;
+      const bx = x + (rng() - 0.5) * 0.7;
+      const bz = riverZ(bx) + side * (RIVER_HALF + 0.1 + rng() * 0.55);
+      const xb0 = Math.round(bx * V), zb0 = Math.round(bz * V);
+      const h0 = getH(xb0, zb0);
+      if (h0 !== 0 || grid.get(xb0, 1, zb0)) continue;
+      const n = 4 + Math.floor(rng() * 6);
       for (let k = 0; k < n; k++) {
-        const cx = x + (rng() - 0.5) * 0.8;
-        const z = riverZ(cx) + side * (RIVER_HALF + 0.15 + rng() * 0.8);
-        const zb = Math.round(z * V), xb = Math.round(cx * V);
-        const h = getH(xb, zb);
-        if (h !== 0 || grid.get(xb, 1, zb)) continue;
-        reeds.push({ x: cx, z, h: 0.75 + rng() * 0.95, v: rng() });
+        const a = rng() * Math.PI * 2, rr = rng() * 0.5;
+        reeds.push({
+          x: bx + Math.cos(a) * rr, z: bz + Math.sin(a) * rr,
+          h: 0.34 + rng() * 0.72, v: rng(), a, r: rr,
+        });
       }
     }
   }
@@ -733,18 +762,21 @@ export function generateWorld() {
 }
 
 // ---------- 纹理图集 ----------
-const TILE = 16, TILES = 16;
+// 每块贴图两侧带 4px 的重复边。放大时用 Nearest 没问题，但远处会走 mipmap，
+// 没有这条护边，线性过滤会把邻格的像素混进边缘 —— 一整片草地就会浮出一层细网格。
+export const ATLAS = { TILE: 16, PAD: 4, SLOT: 24, TILES: 16 };
+const { TILE, PAD, SLOT, TILES } = ATLAS;
 export const TILE_ID = { NOISE: 0, STONE: 1, PLANK: 2, LOG: 3, LOGTOP: 4, THATCH: 5, LEAF: 6, MUD: 7, GRAVEL: 8, GRASS: 9 };
 
 export function makeAtlas() {
   const cv = document.createElement('canvas');
-  cv.width = TILE * TILES; cv.height = TILE;
+  cv.width = SLOT * TILES; cv.height = TILE + 2 * PAD;
   const g = cv.getContext('2d');
   const rnd = mulberry32(7);
   const px = (tile, x, y, v) => {
     const c = Math.max(0, Math.min(255, Math.round(v * 255)));
     g.fillStyle = `rgb(${c},${c},${c})`;
-    g.fillRect(tile * TILE + x, y, 1, 1);
+    g.fillRect(tile * SLOT + PAD + x, PAD + y, 1, 1);
   };
   for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
     const r = rnd();
@@ -757,9 +789,30 @@ export function makeAtlas() {
     px(5, x, y, ((x + Math.floor(y / 3)) % 3 === 0 ? 0.87 : 0.95 + rnd() * 0.04));
     px(6, x, y, r < 0.18 ? 0.82 : 0.9 + rnd() * 0.08);
     px(7, x, y, r < 0.06 ? 0.82 : 0.94 + rnd() * 0.05);
-    px(8, x, y, r < 0.3 ? 0.78 : 0.9 + rnd() * 0.09);
-    px(9, x, y, r < 0.12 ? 0.87 : 0.94 + rnd() * 0.05);
+    px(8, x, y, r < 0.24 ? 0.86 : 0.95 + rnd() * 0.05);
+    px(9, x, y, r < 0.05 ? 0.968 : 0.986 + rnd() * 0.014);
   }
+  // 护边：把每格的边缘像素往外复制一圈
+  const img = g.getImageData(0, 0, cv.width, cv.height);
+  const put = (x, y, sx, sy) => {
+    const a = (sy * cv.width + sx) * 4, b = (y * cv.width + x) * 4;
+    img.data[b] = img.data[a]; img.data[b + 1] = img.data[a + 1];
+    img.data[b + 2] = img.data[a + 2]; img.data[b + 3] = 255;
+  };
+  for (let tile = 0; tile < TILES; tile++) {
+    const x0 = tile * SLOT + PAD;
+    for (let y = 0; y < TILE; y++) {
+      for (let k = 1; k <= PAD; k++) {
+        put(x0 - k, PAD + y, x0, PAD + y);
+        put(x0 + TILE - 1 + k, PAD + y, x0 + TILE - 1, PAD + y);
+      }
+    }
+    for (let x = x0 - PAD; x < x0 + TILE + PAD; x++) {
+      put(x, PAD - 1, x, PAD);
+      put(x, PAD + TILE, x, PAD + TILE - 1);
+    }
+  }
+  g.putImageData(img, 0, 0);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.magFilter = THREE.NearestFilter;
@@ -793,52 +846,59 @@ function tileFor(t, dir) {
 
 // ---------- 季节配色 ----------
 const C = (hex) => new THREE.Color(hex);
+// 绘本配色的关键是「明度分层」：地面最亮、草与树最深、房子在中间调。
+// 之前四季都挤在中明度的黄绿调里，远看就糊成一团。
 const PALETTE = {
-  spring: { grass: C('#9ed682'), leafA: C('#a4d789'), leafB: C('#b9e2a2'), leafC: C('#6ba268'), tleaf: C('#a8d98a'), thatch: C('#dcc08a'), crop: C('#93c76b') },
-  summer: { grass: C('#7cbb66'), leafA: C('#5d9a55'), leafB: C('#6da85f'), leafC: C('#477f4e'), tleaf: C('#74b063'), thatch: C('#d6b57c'), crop: C('#a8bd5e') },
-  autumn: { grass: C('#c3bb7a'), leafA: C('#dca465'), leafB: C('#cc8a59'), leafC: C('#5e8a58'), tleaf: C('#c8a86a'), thatch: C('#cfa76a'), crop: C('#d9b45c') },
-  winter: { grass: C('#eef3f7'), leafA: C('#8a7a63'), leafB: C('#8a7a63'), leafC: C('#4a7050'), tleaf: C('#8a7a63'), thatch: C('#c2a06a'), crop: C('#bdaa86') },
+  spring: { grass: C('#aee08c'), leafA: C('#79c063'), leafB: C('#93d078'), leafC: C('#4e8f52'), tleaf: C('#8ccf6c'), thatch: C('#ecd096'), crop: C('#79bd4e') },
+  summer: { grass: C('#86c96c'), leafA: C('#4f8f47'), leafB: C('#62a355'), leafC: C('#3a7045'), tleaf: C('#63a957'), thatch: C('#e3c48a'), crop: C('#8aa83f') },
+  autumn: { grass: C('#dcc878'), leafA: C('#d99a54'), leafB: C('#c07a47'), leafC: C('#4f7d50'), tleaf: C('#c9a259'), thatch: C('#e0bd7f'), crop: C('#d19b33') },
+  winter: { grass: C('#f2f7fb'), leafA: C('#8b857a'), leafB: C('#8b857a'), leafC: C('#3f6647'), tleaf: C('#8b857a'), thatch: C('#c8a672'), crop: C('#b9a37e') },
 };
 const FIXED = {
-  dirt: C('#8e6a4e'), stone: C('#a09a8c'), sand: C('#ddcba0'), path: C('#b3a68c'), log: C('#7a5c42'), logTop: C('#a88a63'),
-  mud: C('#f0e6cf'), plank: C('#c09a6b'), cobble: C('#9a927f'), mlog: C('#6d5238'), tlog: C('#82684c'), tlogTop: C('#94765a'),
-  snow: C('#f2f6fa'), autumnYellow: C('#e8c23a'), wetsand: C('#b8a078'), soil: C('#96755c'), scree: C('#a39684'),
+  dirt: C('#9c7352'), stone: C('#968d80'), sand: C('#e7d6ab'), path: C('#bfae8e'), log: C('#7a5c42'), logTop: C('#b0916a'),
+  mud: C('#f8f0dc'), plank: C('#c79b69'), cobble: C('#a49b88'), mlog: C('#6d5238'), tlog: C('#8a6e50'), tlogTop: C('#9d7d5e'),
+  snow: C('#f7fbff'), autumnYellow: C('#eec13c'), wetsand: C('#c0a880'), soil: C('#a07b5e'), scree: C('#aca69b'),
 };
-const SNOW_LINE = { spring: 25, summer: 99, autumn: 27, winter: -99 };
+// 雪线按「世界高度」算，faceColor 里再乘回 V（方块坐标）
+const SNOW_LINE = { spring: 99, summer: 99, autumn: 99, winter: -99 };
 
 const tmp = new THREE.Color(), tmpSide = new THREE.Color();
 function faceColor(t, dir, y, v, season, out) {
   const p = PALETTE[season];
-  const snowy = dir === 2 && t !== T.WATER && (season === 'winter' ? t !== T.TLEAF : y >= SNOW_LINE[season] && (t === T.STONE || t === T.GRASS || t === T.DIRT));
+  const yw = y / V;
+  const snowy = dir === 2 && t !== T.WATER && (season === 'winter' ? t !== T.TLEAF : yw >= SNOW_LINE[season] && (t === T.STONE || t === T.GRASS || t === T.DIRT));
   if (snowy && !(t === T.MUD)) { out.copy(FIXED.snow); return out; }
   switch (t) {
     // 侧面直接用草色压暗一点。原来掺土色，方块减半后每一级台阶都会变成一条褐色横纹
     case T.GRASS: out.copy(season === 'winter' ? FIXED.snow : p.grass); break;
     case T.DIRT: out.copy(FIXED.dirt); break;
-    case T.STONE: out.copy(FIXED.stone); break;
+    // 岩体：高度做沉积层理，越高越偏冷；再叠一层低频斑驳当风化
+    case T.STONE: out.copy(FIXED.stone).multiplyScalar(0.94 + v * 0.1); break;
     case T.SAND: out.copy(FIXED.sand); break;
     case T.WETSAND: out.copy(FIXED.wetsand); break;
     case T.SOIL: out.copy(FIXED.soil); break;
-    case T.SCREE: out.copy(FIXED.scree); break;
+    case T.SCREE: out.copy(FIXED.scree).multiplyScalar(0.96 + 0.05 * Math.sin(yw * 3 + v)); break;
     case T.CROP: out.copy(p.crop); if (season === 'winter') out.lerp(FIXED.snow, 0.25); break;
     case T.PATH: out.copy(FIXED.path); break;
     case T.LOG: out.copy(dir === 2 || dir === 3 ? FIXED.logTop : FIXED.log); break;
     case T.MUD: out.copy(FIXED.mud); break;
     case T.PLANK: out.copy(FIXED.plank); break;
     case T.THATCH: out.copy(p.thatch); break;
-    case T.RIDGE: out.copy(p.thatch).multiplyScalar(0.78); break;
+    case T.RIDGE: out.copy(p.thatch).multiplyScalar(0.84); break;
     case T.COBBLE: out.copy(FIXED.cobble); break;
     case T.MLOG: out.copy(FIXED.mlog); break;
     case T.TLOG: out.copy(dir === 2 || dir === 3 ? FIXED.tlogTop : FIXED.tlog); break;
     case T.LEAF_A: out.copy(p.leafA); if (season === 'autumn' && v > 0.6) out.lerp(FIXED.autumnYellow, 0.6); break;
     case T.LEAF_B: out.copy(p.leafB); if (season === 'autumn' && v > 0.7) out.lerp(p.leafA, 0.5); break;
     case T.LEAF_C: out.copy(p.leafC); break;
-    case T.TLEAF: out.copy(p.tleaf); if (season === 'autumn' && v > 0.55) out.lerp(FIXED.autumnYellow, 0.55); break;
+    case T.TLEAF: out.copy(p.tleaf); if (season === 'autumn' && v > 0.55) out.lerp(FIXED.autumnYellow, 0.5); break;
     default: out.setRGB(1, 0, 1);
   }
+  // 冠部受光：叶子从下往上提亮，树冠才不是一颗纯色球
+  if (isLeaf(t)) out.multiplyScalar(0.82 + 0.3 * smoothstep(3, 11, yw));
   // 方块越小，逐块明暗差越要收敛，否则整片地形会变成噪点
   // 地表不做逐块色差：方块只有 4-8 像素时，这点差异会织成一层布纹
-  const k = (t === T.GRASS || t === T.DIRT || t === T.STONE || t === T.SAND || t === T.PATH || t === T.WETSAND || t === T.SOIL || t === T.CROP || t === T.SCREE) ? 1 : 0.975 + v * 0.05;
+  const k = isGround(t) ? 1 : 0.975 + v * 0.05;
   out.r *= k; out.g *= k; out.b *= k;
   return out;
 }
@@ -887,7 +947,9 @@ export function buildMesh(grid, filter, origin = [0, 0, 0]) {
           if (t === T.WATER) { if (nb === T.WATER || occludes(t, nb)) continue; }
           else if (occludes(t, nb)) continue;
           const tile = tileFor(t, f);
-          const u0 = (tile * TILE + 0.02) / (TILE * TILES), u1 = (tile * TILE + TILE - 0.02) / (TILE * TILES);
+          // 图集带护边，UV 直接取格子边界：mipmap 混到的是自己边缘的复制像素，不是邻格
+          const u0 = (tile * SLOT + PAD) / (SLOT * TILES), u1 = (tile * SLOT + PAD + TILE) / (SLOT * TILES);
+          const v0 = PAD / (TILE + 2 * PAD), v1 = (PAD + TILE) / (TILE + 2 * PAD);
           const ao = [0, 0, 0, 0];
           const a0 = AXIS_A[f], a1 = AXIS_B[f];
           for (let k = 0; k < 4; k++) {
@@ -910,7 +972,7 @@ export function buildMesh(grid, filter, origin = [0, 0, 0]) {
             // 地表所有面法线朝上：受光一致，台阶就不会一格亮一格暗；阴影照常接收
             if (isGround(t)) nor.push(0, 1, 0);
             else nor.push(dir.n[0], dir.n[1], dir.n[2]);
-            uv.push(UVS[k][0] ? u1 : u0, UVS[k][1] ? 0.998 : 0.002);
+            uv.push(UVS[k][0] ? u1 : u0, UVS[k][1] ? v1 : v0);
             col.push(1, 1, 1);
           }
           if (ao[0] + ao[2] < ao[1] + ao[3]) idx.push(vcount + 1, vcount + 2, vcount + 3, vcount + 1, vcount + 3, vcount);
