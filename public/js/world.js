@@ -881,7 +881,9 @@ export function buildMesh(grid, filter, origin = [0, 0, 0]) {
             let py = y + c[1];
             if (t === T.WATER && c[1] > 0) py -= WATER_DROP;
             pos.push(x + c[0] - origin[0], py - origin[1], z + c[2] - origin[2]);
-            nor.push(dir.n[0], dir.n[1], dir.n[2]);
+            // 地表所有面法线朝上：受光一致，台阶就不会一格亮一格暗；阴影照常接收
+            if (isGround(t)) nor.push(0, 1, 0);
+            else nor.push(dir.n[0], dir.n[1], dir.n[2]);
             uv.push(UVS[k][0] ? u1 : u0, UVS[k][1] ? 0.998 : 0.002);
             col.push(1, 1, 1);
           }
