@@ -711,9 +711,10 @@ export function generateWorld() {
   const tbx = Math.round(tb.x * V), tbz = Math.round(tb.z * V);
   const W3 = (u) => Math.round(u * V);          // 世界单位 -> 方块
 
-  // 根盘：贴着地面鼓出一圈，别太夸张
-  for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
-    if (dx * dx + dz * dz > 2) continue;
+  // 主角树需要真实根基：随细分倍数增加少量向外鼓出的根趾，仍保持低矮。
+  const rootRadius = Math.max(1, Math.round(V * 0.62));
+  for (let dx = -rootRadius; dx <= rootRadius; dx++) for (let dz = -rootRadius; dz <= rootRadius; dz++) {
+    if (dx * dx + dz * dz > rootRadius * rootRadius + 0.2) continue;
     if (!grid.get(tbx + dx, 1, tbz + dz)) grid.set(tbx + dx, 1, tbz + dz, T.TLOG);
   }
   // 沿两点铺一段圆树干
@@ -734,11 +735,11 @@ export function generateWorld() {
   };
   // 半径按细分倍数折算：V=2 时同样的「块数」会粗出 1.5 倍，树干会胖成一堵墙
   const TR = V / 3;
-  // V3.2 重点枣树：保留自然轻微歪斜，主干与骨架重心仍围绕树根。
-  // 两侧三维主枝的长度、落点和高度成对均衡；不要直接镜像叶缘噪声。
-  limb(tbx, 0, tbz, tbx + W3(0.08), W3(2.1), tbz + W3(0.05), 1.9 * TR, 1.42 * TR);
+  // V3.2 Hero jujube：主干半径 +约 23%，形成有承重感的树腰与稳定根盘。
+  // 仍保留向右小幅自然生长，不镜像树皮及枝条末端。
+  limb(tbx, 0, tbz, tbx + W3(0.08), W3(2.1), tbz + W3(0.05), 2.34 * TR, 1.75 * TR);
   limb(tbx + W3(0.08), W3(2.0), tbz + W3(0.05),
-    tbx + W3(0.18), W3(4.1), tbz + W3(0.08), 1.42 * TR, 1.06 * TR);
+    tbx + W3(0.18), W3(4.1), tbz + W3(0.08), 1.75 * TR, 1.30 * TR);
   const crownArms = [
     {x:-2.35,z:0.92,y:6.28}, {x:2.35,z:-0.78,y:6.38},
     {x:-0.96,z:-2.12,y:6.48}, {x:1.13,z:2.08,y:6.52},
@@ -747,12 +748,13 @@ export function generateWorld() {
   for (const arm of crownArms) {
     limb(tbx + W3(0.17), W3(3.62), tbz + W3(0.08),
       tbx + W3(arm.x * 0.66), W3((arm.y + 3.62) / 2),
-      tbz + W3(arm.z * 0.65), 1.08 * TR, 0.78 * TR);
+      tbz + W3(arm.z * 0.65), 1.47 * TR, 1.03 * TR);
     limb(tbx + W3(arm.x * 0.66), W3((arm.y + 3.62) / 2),
       tbz + W3(arm.z * 0.65), tbx + W3(arm.x), W3(arm.y),
-      tbz + W3(arm.z), 0.78 * TR, 0.38 * TR);
+      tbz + W3(arm.z), 1.03 * TR, 0.54 * TR);
   }
-  // 非完全球形的冠簇：中心承重层 + 均衡的外围树冠 + 小顶冠。
+  // 主枝伸至不同冠团内：稳定中央承重层与外部冠团间留少量枝条可见。
+  // 非完全球形的冠簇：中央宽冠 + 左右横展 + 前后分层 + 高处错落双顶。
   // 果实与花依然从最终 leafCells 中抽取，互动逻辑不变。
   const clusters = [
     {x:0.0,z:0.0,y:7.70,rx:2.06,ry:1.65,rz:1.85},
