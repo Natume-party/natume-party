@@ -40,7 +40,7 @@ renderer.toneMappingExposure = 1.08;
 $('#app').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xbfe0f5, 54, 185);
+scene.fog = new THREE.Fog(0xbfe0f5, 48, 168);
 
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.3, 1200);
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -87,8 +87,8 @@ const sun = new THREE.DirectionalLight(0xffffff, 2.5);
 sun.castShadow = true;
 sun.shadow.mapSize.set(isTouch ? 1024 : 2048, isTouch ? 1024 : 2048);
 Object.assign(sun.shadow.camera, { left: -46, right: 46, top: 46, bottom: -46, near: 1, far: 320 });
-sun.shadow.bias = -0.0008;
-sun.shadow.normalBias = 0.05;
+sun.shadow.bias = -0.0016;
+sun.shadow.normalBias = 0.14;
 scene.add(sun, sun.target);
 const SHADOW_CENTER = new THREE.Vector3(-1, 0, -2);
 sun.target.position.copy(SHADOW_CENTER);
@@ -681,7 +681,7 @@ const FLOWER = {
 };
 const FLOWER_SHOW = { spring: 1, summer: 0.75, autumn: 0.35, winter: 0 };
 const REED = { spring: '#6f9e45', summer: '#5f8f3a', autumn: '#b59a52', winter: '#c9b98a' };
-const WATER_COL = { spring: '#3f8f86', summer: '#2f7f78', autumn: '#336f72', winter: '#cfe3e8' };
+const WATER_COL = { spring: '#4a8f86', summer: '#3f8279', autumn: '#437a78', winter: '#d2e4e6' };
 
 function applySeason() {
   const s = state.season;
@@ -761,10 +761,10 @@ function updateSky(hour) {
   skyUniforms.bottom.value.copy(bottom);
   skyUniforms.mid.value.copy(bottom).lerp(top, 0.55);
   scene.fog.color.copy(bottom);
-  scene.fog.near = state.rain ? 34 : 54;
-  scene.fog.far = state.rain ? 132 : 185;
+  scene.fog.near = state.rain ? 30 : 48;
+  scene.fog.far = state.rain ? 120 : 168;
 
-  const sunI = 2.3 * smoothstep(-0.03, 0.25, sy);
+  const sunI = 1.8 * smoothstep(-0.03, 0.25, sy);
   const moonI = 0.6 * smoothstep(-0.05, 0.2, -sy);
   const isSun = sunI >= moonI;
   const lightDir = isSun ? sunDir : moonDir.copy(sunDir).negate();
@@ -773,10 +773,11 @@ function updateSky(hour) {
   sun.position.copy(SHADOW_CENTER).addScaledVector(lightDir, 160);
   hemi.color.copy(top);
   // 地面反弹光偏草色，方块减半后竖直面太多，原来的土褐色会把整片山坡刷成横纹
-  hemi.groundColor.set(0x7d8462);
-  hemi.intensity = (0.52 + 0.72 * day) * (state.rain ? 0.8 : 1);
+  // 地面反光和天空色拉近：竖直面与水平面的半球光差太大，台阶会连成棋盘格
+  hemi.groundColor.set(0xa8b394);
+  hemi.intensity = (0.72 + 0.8 * day) * (state.rain ? 0.8 : 1);
   // 阴影里留一点底光，不然墙面在低角度太阳下会糊成一片黑
-  ambient.intensity = 0.19 + 0.42 * (1 - day) + 0.45 * dusk;
+  ambient.intensity = 0.3 + 0.4 * (1 - day) + 0.38 * dusk;
   // 白天补光偏暖：草泥墙在影子里别被天光染成蓝灰
   ambient.color.copy(COL.ambDay).lerp(COL.ambNight, 1 - day);
 

@@ -333,7 +333,7 @@ export function generateWorld() {
     for (let zw = -46; zw <= 46; zw++) {
       const d = Math.hypot(xw, zw);
       // 近景留白：太靠近默认机位的树会挡住小屋
-      if (d < 23 || d > 47) continue;
+      if (d < 23 || d > 44) continue;
       // 低频噪声决定疏密：有林子和空地，而不是均匀撒点
       const patch = fbm(xw * 0.055 + 12, zw * 0.055 - 7);
       if (rng() > 0.012 + patch * 0.06) continue;
@@ -724,30 +724,34 @@ export function makeAtlas() {
   };
   for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
     const r = rnd();
-    px(0, x, y, 0.86 + r * 0.14);
-    px(1, x, y, (fbm(x * 0.35, y * 0.35) > 0.55 ? 0.74 : 0.9) + rnd() * 0.1);
+    px(0, x, y, 0.9 + r * 0.1);
+    px(1, x, y, (fbm(x * 0.35, y * 0.35) > 0.55 ? 0.8 : 0.92) + rnd() * 0.07);
     px(2, x, y, (y % 4 === 0 ? 0.68 : 0.9 + rnd() * 0.08) * ((x === (y < 8 ? 5 : 11) && y % 4 !== 0) ? 0.78 : 1));
     px(3, x, y, (x % 4 === 1 ? 0.7 : 0.88 + rnd() * 0.12));
     const rr = Math.hypot(x - 7.5, y - 7.5);
     px(4, x, y, (Math.floor(rr) % 3 === 0 ? 0.72 : 0.92) + rnd() * 0.06);
-    px(5, x, y, ((x + Math.floor(y / 3)) % 3 === 0 ? 0.82 : 0.94 + rnd() * 0.06));
-    px(6, x, y, r < 0.18 ? 0.78 : 0.87 + rnd() * 0.11);
+    px(5, x, y, ((x + Math.floor(y / 3)) % 3 === 0 ? 0.87 : 0.95 + rnd() * 0.04));
+    px(6, x, y, r < 0.18 ? 0.82 : 0.9 + rnd() * 0.08);
     px(7, x, y, r < 0.06 ? 0.82 : 0.94 + rnd() * 0.05);
     px(8, x, y, r < 0.3 ? 0.78 : 0.9 + rnd() * 0.09);
-    px(9, x, y, r < 0.12 ? 0.84 : 0.92 + rnd() * 0.08);
+    px(9, x, y, r < 0.12 ? 0.87 : 0.94 + rnd() * 0.05);
   }
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestMipmapLinearFilter;
+  // 远处用三线性：Nearest 在方块密集的坡面上会糊出摩尔纹（斜向格纹）
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.generateMipmaps = true;
+  // 斜坡是斜视角看贴图，不给各向异性就会织出摩尔纹（那种斜向格纹）
+  tex.anisotropy = 8;
   return tex;
 }
 
 function tileFor(t, dir) {
   const top = dir === 2 || dir === 3;
   switch (t) {
-    case T.GRASS: return dir === 2 ? TILE_ID.GRASS : TILE_ID.NOISE;
+    // 顶面和侧面用同一张图：两张图平均亮度不同，台阶坡面会交替成棋盘格
+    case T.GRASS: return TILE_ID.GRASS;
     case T.STONE: case T.COBBLE: return TILE_ID.STONE;
     case T.PATH: return TILE_ID.GRAVEL;
     case T.WETSAND: return TILE_ID.GRAVEL;
@@ -767,7 +771,7 @@ const C = (hex) => new THREE.Color(hex);
 const PALETTE = {
   spring: { grass: C('#9ed682'), leafA: C('#a4d789'), leafB: C('#b9e2a2'), leafC: C('#6ba268'), tleaf: C('#a8d98a'), thatch: C('#dcc08a'), crop: C('#93c76b') },
   summer: { grass: C('#7cbb66'), leafA: C('#5d9a55'), leafB: C('#6da85f'), leafC: C('#477f4e'), tleaf: C('#74b063'), thatch: C('#d6b57c'), crop: C('#a8bd5e') },
-  autumn: { grass: C('#c3bb7a'), leafA: C('#d99a52'), leafB: C('#c47a4b'), leafC: C('#568a55'), tleaf: C('#c2a45a'), thatch: C('#cfa76a'), crop: C('#d9b45c') },
+  autumn: { grass: C('#c3bb7a'), leafA: C('#dca465'), leafB: C('#cc8a59'), leafC: C('#5e8a58'), tleaf: C('#c8a86a'), thatch: C('#cfa76a'), crop: C('#d9b45c') },
   winter: { grass: C('#eef3f7'), leafA: C('#8a7a63'), leafB: C('#8a7a63'), leafC: C('#4a7050'), tleaf: C('#8a7a63'), thatch: C('#c2a06a'), crop: C('#bdaa86') },
 };
 const FIXED = {
@@ -784,7 +788,7 @@ function faceColor(t, dir, y, v, season, out) {
   if (snowy && !(t === T.MUD)) { out.copy(FIXED.snow); return out; }
   switch (t) {
     // 侧面直接用草色压暗一点。原来掺土色，方块减半后每一级台阶都会变成一条褐色横纹
-    case T.GRASS: out.copy(season === 'winter' ? FIXED.snow : p.grass); if (dir !== 2) out.multiplyScalar(season === 'winter' ? 0.95 : 0.9); break;
+    case T.GRASS: out.copy(season === 'winter' ? FIXED.snow : p.grass); break;
     case T.DIRT: out.copy(FIXED.dirt); break;
     case T.STONE: out.copy(FIXED.stone); break;
     case T.SAND: out.copy(FIXED.sand); break;
@@ -807,7 +811,8 @@ function faceColor(t, dir, y, v, season, out) {
     default: out.setRGB(1, 0, 1);
   }
   // 方块越小，逐块明暗差越要收敛，否则整片地形会变成噪点
-  const k = 0.94 + v * 0.08;
+  // 地表不做逐块色差：方块只有 4-8 像素时，这点差异会织成一层布纹
+  const k = (t === T.GRASS || t === T.DIRT || t === T.STONE || t === T.SAND || t === T.PATH || t === T.WETSAND || t === T.SOIL || t === T.CROP) ? 1 : 0.975 + v * 0.05;
   out.r *= k; out.g *= k; out.b *= k;
   return out;
 }
@@ -821,13 +826,17 @@ const DIRS = [
   { n: [0, 0, 1], c: [[-0.5, -0.5, 0.5], [0.5, -0.5, 0.5], [0.5, 0.5, 0.5], [-0.5, 0.5, 0.5]] },
   { n: [0, 0, -1], c: [[0.5, -0.5, -0.5], [-0.5, -0.5, -0.5], [-0.5, 0.5, -0.5], [0.5, 0.5, -0.5]] },
 ];
-const FACE_SHADE = [0.94, 0.94, 1.0, 0.82, 0.9, 0.9];
-const AO_CURVE = [0.8, 0.89, 0.96, 1.0];
+const FACE_SHADE = [0.9, 0.9, 1.0, 0.72, 0.84, 0.84];
+const AO_CURVE = [0.62, 0.78, 0.9, 1.0];
 const UVS = [[0, 0], [1, 0], [1, 1], [0, 1]];
 // 每个方向上，与法线垂直的两个轴（0=x 1=y 2=z）。预先算好，避免逐面分配数组。
 const AXIS_A = [1, 1, 0, 0, 0, 0];
 const AXIS_B = [2, 2, 2, 2, 1, 1];
 const WATER_DROP = 0.22;
+// 地表类：坡面是台阶拼出来的，一旦逐面加 AO/朝向差就会连成棋盘格。
+// 让它们保持纯色（只有大尺度 tint），体积感交给建筑与树。
+const isGround = (t) => t === T.GRASS || t === T.DIRT || t === T.STONE || t === T.SAND
+  || t === T.PATH || t === T.WETSAND || t === T.SOIL || t === T.CROP;
 
 /**
  * 把网格里满足 filter 的方块转成一个 BufferGeometry（只生成外露的面，带顶点环境光遮蔽）。
@@ -879,7 +888,8 @@ export function buildMesh(grid, filter, origin = [0, 0, 0]) {
           if (ao[0] + ao[2] < ao[1] + ao[3]) idx.push(vcount + 1, vcount + 2, vcount + 3, vcount + 1, vcount + 3, vcount);
           else idx.push(vcount, vcount + 1, vcount + 2, vcount, vcount + 2, vcount + 3);
           vcount += 4;
-          const tint = vnoise(x * 0.018, z * 0.018) * 0.65 + vnoise(x * 0.06, z * 0.06) * 0.35;
+          // 用 fbm 而不是两三层 vnoise：后者是网格状值噪声，斜看会显出一块块方格
+          const tint = fbm(x * 0.028 + 11, z * 0.028 - 4);
           meta.push(t, f, y, v, tint, ao[0], ao[1], ao[2], ao[3]);
         }
       }
@@ -900,9 +910,10 @@ export function buildMesh(grid, filter, origin = [0, 0, 0]) {
     for (let i = 0; i < faces; i++) {
       const m = i * 9;
       faceColor(meta[m], meta[m + 1], meta[m + 2], meta[m + 3], season, tmp);
-      const shade = FACE_SHADE[meta[m + 1]] * (0.93 + meta[m + 4] * 0.14);
+      const ground = isGround(meta[m]);
+      const shade = (ground ? 1 : FACE_SHADE[meta[m + 1]]) * (0.96 + meta[m + 4] * 0.08);
       for (let k = 0; k < 4; k++) {
-        const s = shade * AO_CURVE[meta[m + 5 + k]];
+        const s = shade * (ground ? 1 : AO_CURVE[meta[m + 5 + k]]);
         const o = (i * 4 + k) * 3;
         colors[o] = tmp.r * s; colors[o + 1] = tmp.g * s; colors[o + 2] = tmp.b * s;
       }
