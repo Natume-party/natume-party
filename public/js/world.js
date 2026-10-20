@@ -178,8 +178,8 @@ export function generateWorld() {
           if (river) t = T.SAND;
           else if (isPath(xw, zw)) t = T.PATH;
           // 岸线用噪声推一下：等宽的一条浅色带看着像水泥路缘
-          else if (h <= 0 && rd < RIVER_HALF + 0.5 + fbm(xw * 0.75 + 2, zw * 0.75 - 6) * 0.95) {
-            t = rd < RIVER_HALF + 0.28 + fbm(xw * 1.3, zw * 1.3) * 0.3 ? T.WETSAND : T.SAND;
+          else if (h <= 0 && rd < RIVER_HALF + 0.24 + fbm(xw * 0.75 + 2, zw * 0.75 - 6) * 0.65) {
+            t = rd < RIVER_HALF + 0.11 + fbm(xw * 1.3, zw * 1.3) * 0.25 ? T.WETSAND : T.SAND;
           }
           else if (steep || rocky) t = T.STONE;
           else if (foot) t = T.SCREE;
@@ -746,19 +746,19 @@ export function generateWorld() {
   const reeds = [];
   for (let x = -25; x <= 25; x += 1.2 + rng() * 3.4) {
     for (const side of [-1, 1]) {
-      if (rng() > 0.66) continue;
-      if (x >= PATH_X0 - 1.2 && x <= PATH_X1 + 1.2) continue;
+      if (rng() > 0.58) continue;
+      if (x >= PATH_X0 - 3 && x <= PATH_X1 + 3) continue;
       const bx = x + (rng() - 0.5) * 0.7;
       const bz = riverZ(bx) + side * (RIVER_HALF + 0.1 + rng() * 0.55);
       const xb0 = Math.round(bx * V), zb0 = Math.round(bz * V);
       const h0 = getH(xb0, zb0);
       if (h0 !== 0 || grid.get(xb0, 1, zb0)) continue;
-      const n = 4 + Math.floor(rng() * 6);
+      const n = 2 + Math.floor(rng() * 4);
       for (let k = 0; k < n; k++) {
         const a = rng() * Math.PI * 2, rr = rng() * 0.5;
         reeds.push({
           x: bx + Math.cos(a) * rr, z: bz + Math.sin(a) * rr,
-          h: 0.34 + rng() * 0.72, v: rng(), a, r: rr,
+          h: 0.32 + rng() * 0.54, v: rng(), a, r: rr,
         });
       }
     }
@@ -888,9 +888,9 @@ const PALETTE = {
   winter: { grass: C('#f2f7fb'), leafA: C('#8b857a'), leafB: C('#8b857a'), leafC: C('#3f6647'), tleaf: C('#8b857a'), thatch: C('#c8a672'), crop: C('#b9a37e') },
 };
 const FIXED = {
-  dirt: C('#9c7352'), stone: C('#968d80'), sand: C('#e7d6ab'), path: C('#bfae8e'), log: C('#7a5c42'), logTop: C('#b0916a'),
+  dirt: C('#9c7352'), stone: C('#968d80'), sand: C('#d8caa9'), path: C('#bfae8e'), log: C('#7a5c42'), logTop: C('#b0916a'),
   mud: C('#f8f0dc'), plank: C('#c79b69'), cobble: C('#a49b88'), mlog: C('#6d5238'), tlog: C('#8a6e50'), tlogTop: C('#9d7d5e'),
-  snow: C('#f7fbff'), autumnYellow: C('#eec13c'), wetsand: C('#c0a880'), soil: C('#a07b5e'), scree: C('#aca69b'),
+  snow: C('#f7fbff'), autumnYellow: C('#eec13c'), wetsand: C('#aa9f89'), soil: C('#a07b5e'), scree: C('#aca69b'),
 };
 // 雪线按「世界高度」算，faceColor 里再乘回 V（方块坐标）
 const SNOW_LINE = { spring: 99, summer: 99, autumn: 99, winter: -99 };

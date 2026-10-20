@@ -274,7 +274,7 @@ scene.add(porchLight);
       dummy.scale.set(1, 1, 1);
       dummy.updateMatrix();
       rails.setMatrixAt(rn++, dummy.matrix);
-      if (j % 2 === 0) balusters.push([x, y, z]);
+      if (j % 3 === 0) balusters.push([x, y, z]);
     }
   }
   rails.castShadow = true;
@@ -471,8 +471,8 @@ scene.add(lilyMesh);
 
 
 
-const reedMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.1, 1, 0.04), new THREE.MeshLambertMaterial(), W.reeds.length);
-const cattailMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.17, 0.34, 0.17), new THREE.MeshLambertMaterial({ color: 0x7a5232 }), W.reeds.length);
+const reedMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.065, 1, 0.032), new THREE.MeshLambertMaterial(), W.reeds.length);
+const cattailMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.125, 0.28, 0.125), new THREE.MeshLambertMaterial({ color: 0x7a5232 }), W.reeds.length);
 W.reeds.forEach((r, i) => {
   const lean = 0.1 + r.r * 0.5;
   dummy.rotation.set(Math.sin(r.a) * lean, r.a, -Math.cos(r.a) * lean);
@@ -489,7 +489,7 @@ W.reeds.forEach((r, i) => {
   dummy.updateMatrix();
   cattailMesh.setMatrixAt(i, dummy.matrix);
 });
-cattailMesh.count = Math.round(W.reeds.length * 0.45);
+cattailMesh.count = Math.round(W.reeds.length * 0.33);
 reedMesh.castShadow = true;
 scene.add(reedMesh, cattailMesh);
 
