@@ -659,14 +659,20 @@ export function generateWorld() {
       : { x: w.wall / V, y: yc, z: along, axis: 'x' });
   }
 
-  // 双坡茅草顶：出挑 1 个单位，每层收 1 块
-  const ov = V;
+  // V3.2 Hero cottage：减轻原屋顶过大外挑，保持两侧严格对称。
+  // 墙身不变，屋脊与山墙全部继续共用这一个坡度几何源。
+  const ov = Math.max(1, Math.round(V * 0.67));
   const roofY = wy1 + 1;
   const half = Math.floor((hz1 - hz0 + 1 + 2 * ov) / 2);
   for (let k = 0; k <= half; k++) {
     const za = hz0 - ov + k, zb = hz1 + ov - k;
     if (za > zb) break;
     boxFill(hx0 - ov, hx1 + ov, roofY + k, roofY + k, za, zb, T.THATCH);
+  }
+  // 屋檐下独立一条细木檐口，让屋顶读成茅草覆盖而非一块厚实的台阶山。
+  for (let x = hx0 - ov; x <= hx1 + ov; x++) {
+    grid.set(x, roofY - 1, hz0 - ov, T.LOG);
+    grid.set(x, roofY - 1, hz1 + ov, T.LOG);
   }
   // V3.2 两侧山墙补齐：原来屋顶升高后，东西侧墙顶部留下三角空隙。
   // 同一中心轴和坡度公式，用于左右两面，保持房屋承重轮廓对称。
@@ -697,7 +703,8 @@ export function generateWorld() {
   for (let y = wy0 + 3; y <= chTop; y++) {
     for (let i = 0; i < 2; i++) for (let k = 0; k < 2; k++) grid.set(chx + i, y, chz + k, T.COBBLE);
   }
-  for (let i = -1; i <= 2; i++) for (let k = -1; k <= 2; k++) grid.set(chx + i, chTop + 1, chz + k, T.COBBLE);
+  // 烟囱帽由 4×4 缩为 3×3 体素；移动端避免它看起来和小屋半间房一样宽。
+  for (let i = -1; i <= 1; i++) for (let k = -1; k <= 1; k++) grid.set(chx + i, chTop + 1, chz + k, T.COBBLE);
 
   // ---- 枣树：根盘 + 三级分枝 + 分离的冠簇 + 挂果 ----
   const tb = TREE;
