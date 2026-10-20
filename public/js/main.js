@@ -393,6 +393,29 @@ const fireSeeds = Array.from({ length: FIRE_N }, () => ({
 }));
 let fireT = 0;
 
+
+// ---------- 蝴蝶：白天在草坡的花丛间飘 ----------
+const BFLY_N = 10;
+const bflyMat = new THREE.MeshLambertMaterial({ vertexColors: false, transparent: true, opacity: 0 });
+const bflyMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.16, 0.05, 0.24), bflyMat, BFLY_N);
+bflyMesh.frustumCulled = false;
+scene.add(bflyMesh);
+const BFLY_COLORS = ['#f6c453', '#f08b6a', '#e8e0f4', '#8fd0e8'];
+const bflySeeds = Array.from({ length: BFLY_N }, () => {
+  const f = flowerOrder[Math.floor(Math.random() * flowerOrder.length)] || { x: 0, z: 0 };
+  return {
+    x: f.x + (Math.random() - 0.5) * 3,
+    z: f.z + (Math.random() - 0.5) * 3,
+    y: 0.9 + Math.random() * 1.1,
+    r: 0.9 + Math.random() * 1.4,
+    sp: 0.35 + Math.random() * 0.5,
+    ph: Math.random() * 6.28,
+  };
+});
+for (let i = 0; i < BFLY_N; i++) bflyMesh.setColorAt(i, new THREE.Color(BFLY_COLORS[i % BFLY_COLORS.length]));
+if (bflyMesh.instanceColor) bflyMesh.instanceColor.needsUpdate = true;
+let bflyT = 0;
+
 // ---------- 炊烟 ----------
 const smoke = [];
 for (let i = 0; i < 8; i++) {
@@ -447,7 +470,8 @@ function buildClouds() {
     if (v < thr) continue;
     dummy.position.set((i - CN / 2) * CELL, 62, (j - CN / 2) * CELL);
     dummy.rotation.set(0, 0, 0);
-    dummy.scale.set(CELL, 2.6 + (v - thr) * 6, CELL);
+    const puff = 0.55 + ((v - thr) / (1 - thr)) * 0.9;
+    dummy.scale.set(CELL * puff, (2.2 + (v - thr) * 7) * (0.7 + puff * 0.5), CELL * puff);
     dummy.updateMatrix();
     cloudMesh.setMatrixAt(n++, dummy.matrix);
   }
@@ -655,7 +679,7 @@ function updateSky(hour) {
   hemi.groundColor.set(0x7d8462);
   hemi.intensity = (0.4 + 0.8 * day) * (state.rain ? 0.8 : 1);
   // 阴影里留一点底光，不然墙面在低角度太阳下会糊成一片黑
-  ambient.intensity = 0.17 + 0.5 * (1 - day) + 0.45 * dusk;
+  ambient.intensity = 0.17 + 0.62 * (1 - day) + 0.45 * dusk;
   // 白天补光偏暖：草泥墙在影子里别被天光染成蓝灰
   ambient.color.copy(COL.ambDay).lerp(COL.ambNight, 1 - day);
 
@@ -675,7 +699,7 @@ function updateSky(hour) {
 
   cloudMat.color.copy(COL.cloudNight).lerp(COL.cloudDay, day).lerp(COL.cloudDusk, dusk * 0.5);
   // 夜里把草地上的小花一起压暗，否则会变成一片发光的彩色噪点
-  const flowerDim = 0.28 + 0.72 * day;
+  const flowerDim = 0.1 + 0.9 * day;
   stemMesh.material.color.setScalar(flowerDim);
   petalMesh.material.color.setScalar(flowerDim);
   if (state.rain) cloudMat.color.lerp(cTmp.copy(COL.cloudNight).lerp(COL.cloudRain, day), 0.8);
@@ -1110,6 +1134,28 @@ function frame() {
       fireMesh.setMatrixAt(i, dummy.matrix);
     }
     fireMesh.instanceMatrix.needsUpdate = true;
+  }
+
+  // 蝴蝶：只有晴天的白天出来
+  bflyT += dt;
+  const bflyOn = !state.rain && dayness > 0.55 && state.season !== 'winter';
+  bflyMesh.visible = bflyOn;
+  if (bflyOn) {
+    bflyMat.opacity = 0.95;
+    for (let i = 0; i < BFLY_N; i++) {
+      const q = bflySeeds[i];
+      const t = bflyT * q.sp + q.ph;
+      dummy.position.set(
+        q.x + Math.cos(t) * q.r,
+        q.y + Math.sin(t * 2.3) * 0.22 + 0.1,
+        q.z + Math.sin(t * 1.3) * q.r,
+      );
+      dummy.rotation.set(0, t * 0.7, Math.sin(t * 7) * 0.5);
+      dummy.scale.setScalar(0.8 + Math.sin(t * 9) * 0.25);
+      dummy.updateMatrix();
+      bflyMesh.setMatrixAt(i, dummy.matrix);
+    }
+    bflyMesh.instanceMatrix.needsUpdate = true;
   }
 
   controls.update();

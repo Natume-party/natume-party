@@ -169,48 +169,128 @@ export function generateWorld() {
     }
   }
 
-  // ---- 山上的树 ----
-  for (let xb = -RB + 2 * V; xb <= RB - 2 * V; xb++) {
-    for (let zb = -RB + 2 * V; zb <= RB - 2 * V; zb++) {
-      const xw = xb / V, zw = zb / V;
+  // ---- 路上和小路边缘的碎石（让路面不至于像一条贴图带）----
+  for (let z = Math.floor(HUT.z1); z <= pathZ1; z++) {
+    for (const x of [PATH_X0 - 1, PATH_X1 + 1]) {
+      if (rng() > 0.3) continue;
+      const xb = Math.round(x * V), zb = Math.round(z * V);
+      const h = getH(xb, zb);
+      if (h < 0 || grid.get(xb, h, zb) !== T.GRASS) continue;
+      grid.set(xb, h, zb, T.PATH);
+    }
+  }
+
+  // ---- 草坡上的巨石：石包上偶尔盖一块草 ----
+  const boulder = (cxw, czw, size) => {
+    const xb = Math.round(cxw * V), zb = Math.round(czw * V);
+    const h = getH(xb, zb);
+    if (h < 0) return;
+    const R = Math.max(1, Math.round(size * V / 2));
+    for (let dx = -R; dx <= R; dx++) for (let dz = -R; dz <= R; dz++) {
+      const e = (dx * dx + dz * dz) / (R * R + 0.6);
+      if (e > 1) continue;
+      const top = h + 1 + Math.round((1 - e) * R * (0.35 + hash3(xb + dx, 7, zb + dz) * 0.7));
+      for (let y = h; y <= top; y++) {
+        if (grid.get(xb + dx, y, zb + dz)) continue;
+        const moss = y === top && hash3(xb + dx, y, zb + dz) > 0.62;
+        grid.set(xb + dx, y, zb + dz, moss ? T.GRASS : T.STONE);
+      }
+    }
+  };
+  for (let i = 0; i < 44; i++) {
+    const a = rng() * Math.PI * 2, r = 9 + rng() * 30;
+    const xw = Math.cos(a) * r, zw = Math.sin(a) * r;
+    if (rectDist(HUT_ZONE, xw, zw) < 2.6 || rectDist(TREE_ZONE, xw, zw) < 2.6) continue;
+    if (Math.abs(zw - riverZ(xw)) < RIVER_HALF + 1.2) continue;
+    if (isPath(xw, zw)) continue;
+    boulder(xw, zw, 0.45 + rng() * 1.15);
+  }
+
+  // ---- 河里的踏脚石 ----
+  for (let x = -24; x <= 24; x++) {
+    for (const side of [-1, 1]) {
+      if (rng() > 0.2) continue;
+      const z = riverZ(x) + side * (RIVER_HALF - 0.2 - rng() * 0.5);
+      const xb = Math.round(x * V), zb = Math.round(z * V);
+      if (grid.get(xb, 1, zb)) continue;
+      grid.set(xb, 1, zb, T.STONE);
+      if (rng() < 0.45) grid.set(xb, 2, zb, T.STONE);
+    }
+  }
+
+  // ---- 山上的树：成片分布、三种树型、尺寸抖动 ----
+  const blob = (cx, cy, cz, rx, ry, rz, leaf, holes = 0.22) => {
+    const RX = Math.ceil(rx), RY = Math.ceil(ry), RZ = Math.ceil(rz);
+    const cells = [];
+    for (let dx = -RX; dx <= RX; dx++) for (let dy = -RY; dy <= RY; dy++) for (let dz = -RZ; dz <= RZ; dz++) {
+      const e = (dx / rx) ** 2 + (dy / ry) ** 2 + (dz / rz) ** 2;
+      if (e > 1) continue;
+      const x = cx + dx, y = cy + dy, z = cz + dz;
+      if (grid.get(x, y, z)) continue;
+      if (e > 0.58 && hash3(x, y, z) < holes) continue;
+      grid.set(x, y, z, leaf);
+      cells.push({ x, y, z, e });
+    }
+    return cells;
+  };
+
+  const sites = [];
+  for (let xw = -46; xw <= 46; xw++) {
+    for (let zw = -46; zw <= 46; zw++) {
       const d = Math.hypot(xw, zw);
       // 近景留白：太靠近默认机位的树会挡住小屋
       if (d < 23 || d > 47) continue;
+      // 低频噪声决定疏密：有林子和空地，而不是均匀撒点
+      const patch = fbm(xw * 0.055 + 12, zw * 0.055 - 7);
+      if (rng() > 0.012 + patch * 0.06) continue;
+      const jx = xw + (rng() - 0.5) * 0.9, jz = zw + (rng() - 0.5) * 0.9;
+      const xb = Math.round(jx * V), zb = Math.round(jz * V);
       const h = getH(xb, zb);
       if (h < 0 || h > 30 * V) continue;
-      if (Math.abs(zw - riverZ(xw)) < RIVER_HALF + 2.5) continue;
-      if (rectDist(HUT_ZONE, xw, zw) < 3 || rectDist(TREE_ZONE, xw, zw) < 3) continue;
+      if (Math.abs(jz - riverZ(jx)) < RIVER_HALF + 2.5) continue;
+      if (rectDist(HUT_ZONE, jx, jz) < 3 || rectDist(TREE_ZONE, jx, jz) < 3) continue;
       if (grid.get(xb, h, zb) !== T.GRASS) continue;
-      if (rng() > 0.05 / (V * V)) continue;
-      let crowded = false;
-      for (let dx = -2 * V; dx <= 2 * V && !crowded; dx++) for (let dz = -2 * V; dz <= 2 * V; dz++) {
-        if (grid.get(xb + dx, h + 3 * V, zb + dz) || grid.get(xb + dx, h + 2 * V, zb + dz)) { crowded = true; break; }
+      if (sites.some((q) => Math.hypot(q.xb - xb, q.zb - zb) < 2.6 * V)) continue;
+      sites.push({ xb, zb, h, alt: h / V });
+    }
+  }
+
+  for (const site of sites.slice(0, 46)) {
+    const { xb, zb, h } = site;
+    const kind = rng();
+    const pine = site.alt > 13 || (site.alt > 9 && kind < 0.45);
+    const slim = !pine && kind > 0.74;
+    const leaf = pine ? T.LEAF_C : kind < 0.4 ? T.LEAF_A : T.LEAF_B;
+    const sc = 0.85 + rng() * 0.45;
+    const trunkH = Math.max(2 * V, Math.round((pine ? 3.2 : 2.6) * sc * V));
+    for (let y = 1; y <= trunkH; y++) {
+      const wide = y <= Math.ceil(trunkH * 0.35);
+      const n = wide ? Math.max(2, Math.round(V / 2)) : 1;
+      for (let i = 0; i < n; i++) for (let k = 0; k < n; k++) grid.set(xb + i, h + y, zb + k, T.MLOG);
+    }
+    const top = h + trunkH;
+    if (pine) {
+      // 松：四层收窄的锥
+      for (let L = 0; L < 4; L++) {
+        const r = Math.max(2, (3.4 - L * 0.7) * sc * (V / 2));
+        blob(xb, top + Math.round(L * 0.85 * V), zb, r, Math.max(1, r * 0.62), r, leaf, 0.16);
       }
-      if (crowded) continue;
-      const kindR = rng();
-      const leaf = kindR < 0.4 ? T.LEAF_C : kindR < 0.7 ? T.LEAF_A : T.LEAF_B;
-      const th = (2 + Math.floor(rng() * 2)) * V;
-      for (let i = 0; i < V; i++) for (let k = 0; k < V; k++) {
-        for (let y = 1; y <= th + V; y++) grid.set(xb + i, h + y, zb + k, T.MLOG);
-      }
-      const put = (dx, dy, dz) => { if (!grid.get(xb + dx, h + dy, zb + dz)) grid.set(xb + dx, h + dy, zb + dz, leaf); };
-      if (leaf === T.LEAF_C) {
-        // 松树：分层收窄
-        for (let dx = -2 * V; dx <= 2 * V; dx++) for (let dz = -2 * V; dz <= 2 * V; dz++) {
-          const m = Math.abs(dx) + Math.abs(dz);
-          if (m <= 3 * V) put(dx, th, dz);
-          if (m <= 2 * V) put(dx, th + V, dz);
-          if (m <= V) put(dx, th + 2 * V, dz);
-        }
-        put(0, th + 3 * V, 0);
-      } else {
-        // 阔叶树：圆团
-        for (let dx = -2 * V; dx <= 2 * V; dx++) for (let dz = -2 * V; dz <= 2 * V; dz++) for (let dy = 0; dy <= 2 * V; dy++) {
-          if (Math.abs(dx) === 2 * V && Math.abs(dz) === 2 * V) continue;
-          if (dy === 2 * V && (Math.abs(dx) === 2 * V || Math.abs(dz) === 2 * V)) continue;
-          if (rng() < 0.06) continue;
-          put(dx, th + dy, dz);
-        }
+    } else if (slim) {
+      // 细高（杨树感）
+      const r = Math.max(2, 1.55 * sc * (V / 2));
+      blob(xb, top + Math.round(1.6 * V), zb, r, 3.1 * sc * (V / 2), r, leaf, 0.2);
+    } else {
+      // 阔叶：两三个团簇错开
+      const n = 2 + (rng() < 0.5 ? 1 : 0);
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + rng() * 0.8;
+        const r = Math.max(2, (2.3 + rng() * 0.7) * sc * (V / 2));
+        blob(
+          xb + Math.round(Math.cos(a) * 0.8 * V),
+          top + Math.round((1.1 + rng() * 0.8) * V),
+          zb + Math.round(Math.sin(a) * 0.8 * V),
+          r, r * 0.82, r, leaf, 0.22,
+        );
       }
     }
   }
@@ -324,49 +404,95 @@ export function generateWorld() {
   }
   for (let i = -1; i <= 2; i++) for (let k = -1; k <= 2; k++) grid.set(chx + i, chTop + 1, chz + k, T.COBBLE);
 
-  // ---- 枣树 ----
+  // ---- 枣树：根盘 + 三级分枝 + 分离的冠簇 + 挂果 ----
   const tb = TREE;
-  const trunk = [[0, 1, 0], [0, 2, 0], [0, 3, 0], [0, 4, 0], [1, 1, 0], [0, 1, 1],
-    [0, 5, 0], [0, 6, 0], [-1, 4, 0], [-2, 5, 0], [1, 4, 0], [2, 5, 0], [2, 6, 1], [0, 5, -1], [0, 6, -2], [0, 5, 1], [0, 6, 2]];
-  for (const [dx, dy, dz] of trunk) fillCell(tb.x + dx, dy, tb.z + dz, T.TLOG);
-  // 树冠按小方块生成，比原来圆滑
-  const leafCenter = { x: tb.x * V, y: 7 * V, z: tb.z * V };
-  const rx = 4.2 * V, ry = 2.7 * V, rz = 3.8 * V;
-  const leafCells = [];
-  for (let dx = -5 * V; dx <= 5 * V; dx++) for (let dy = -3 * V; dy <= 3 * V; dy++) for (let dz = -5 * V; dz <= 5 * V; dz++) {
-    const e = (dx / rx) ** 2 + (dy / ry) ** 2 + (dz / rz) ** 2;
-    if (e > 1) continue;
-    const x = leafCenter.x + dx, y = leafCenter.y + dy, z = leafCenter.z + dz;
-    if (grid.get(x, y, z)) continue;
-    if (e > 0.62 && hash3(x, y, z) < 0.2) continue;
-    grid.set(x, y, z, T.TLEAF);
-    leafCells.push({ x, y, z, e, dx, dy, dz });
+  const tbx = Math.round(tb.x * V), tbz = Math.round(tb.z * V);
+  const W3 = (u) => Math.round(u * V);          // 世界单位 -> 方块
+
+  // 根盘：贴着地面鼓出一圈，别太夸张
+  for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+    if (dx * dx + dz * dz > 2) continue;
+    if (!grid.get(tbx + dx, 1, tbz + dz)) grid.set(tbx + dx, 1, tbz + dz, T.TLOG);
   }
-  // 挂在树冠外侧的枣子和枣花（方块坐标，导出时换算回世界单位）
-  const outer = leafCells.filter((c) => c.e > 0.6 && c.dy <= V);
-  const pick = (arr, n) => {
+  // 沿两点铺一段圆树干
+  const limb = (x0, y0, z0, x1, y1, z1, r0, r1) => {
+    const steps = Math.max(2, Math.round(Math.hypot(x1 - x0, y1 - y0, z1 - z0) * 2));
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const cx = Math.round(x0 + (x1 - x0) * t);
+      const cy = Math.round(y0 + (y1 - y0) * t);
+      const cz = Math.round(z0 + (z1 - z0) * t);
+      const rr = r0 + (r1 - r0) * t;
+      const R = Math.max(0, Math.round(rr));
+      for (let dx = -R; dx <= R; dx++) for (let dz = -R; dz <= R; dz++) {
+        if (dx * dx + dz * dz > rr * rr + 0.35) continue;
+        grid.set(cx + dx, cy, cz + dz, T.TLOG);
+      }
+    }
+  };
+  // 主干：细一点、带一点倾斜
+  limb(tbx, 0, tbz, tbx + W3(0.3), W3(3.4), tbz + W3(0.1), 1.0, 0.7);
+  // 三条主枝
+  limb(tbx + W3(0.3), W3(2.9), tbz + W3(0.1), tbx - W3(1.4), W3(6.2), tbz + W3(0.9), 1.0, 0.7);
+  limb(tbx + W3(0.3), W3(3.1), tbz + W3(0.1), tbx + W3(1.5), W3(6.4), tbz - W3(1.0), 1.0, 0.7);
+  limb(tbx + W3(0.3), W3(3.2), tbz + W3(0.1), tbx + W3(0.2), W3(6.6), tbz + W3(1.5), 1.0, 0.7);
+  // 二级小枝
+  limb(tbx - W3(1.4), W3(6.2), tbz + W3(0.9), tbx - W3(2.4), W3(7.2), tbz + W3(1.8), 0.7, 0.5);
+  limb(tbx + W3(1.5), W3(6.4), tbz - W3(1.0), tbx + W3(2.5), W3(7.4), tbz - W3(1.8), 0.7, 0.5);
+
+  // 冠簇：五团分离的球，彼此留缝
+  const clusters = [
+    { x: tbx - W3(2.5), y: W3(7.1), z: tbz + W3(1.4), r: 6 },
+    { x: tbx + W3(2.6), y: W3(7.2), z: tbz - W3(1.5), r: 6 },
+    { x: tbx + W3(0.3), y: W3(8.2), z: tbz + W3(2.0), r: 5 },
+    { x: tbx + W3(0.1), y: W3(8.3), z: tbz - W3(0.2), r: 6 },
+    { x: tbx - W3(1.4), y: W3(7.6), z: tbz - W3(2.4), r: 5 },
+  ];
+  const leafCells = [];
+  for (const c of clusters) {
+    const R = Math.max(3, Math.round(c.r * V / 3));
+    for (let dx = -R; dx <= R; dx++) for (let dy = -R; dy <= R; dy++) for (let dz = -R; dz <= R; dz++) {
+      const e = (dx * dx + dy * dy + dz * dz) / (R * R);
+      if (e > 1) continue;
+      const x = c.x + dx, y = c.y + dy, z = c.z + dz;
+      if (grid.get(x, y, z)) continue;
+      // 边缘多挖一点，剪影才不像一个整球
+      if (e > 0.55 && hash3(x, y, z) < 0.22) continue;
+      grid.set(x, y, z, T.TLEAF);
+      leafCells.push({ x, y, z, e, cy: c.y, R });
+    }
+  }
+  const pickCells = (arr, n) => {
     const a = arr.slice(), out = [];
     while (out.length < n && a.length) out.push(a.splice(Math.floor(rng() * a.length), 1)[0]);
     return out;
   };
-  const toSpot = (c, push) => {
-    const len = Math.hypot(c.dx / rx, c.dy / ry, c.dz / rz) || 1;
-    return {
-      x: (c.x + (c.dx / rx / len) * push) / V,
-      y: (c.y + (c.dy / ry / len) * push * 0.6 - 0.25 * V) / V,
-      z: (c.z + (c.dz / rz / len) * push) / V,
-      v: hash3(c.x, c.y, c.z),
-    };
-  };
-  const fruitSpots = pick(outer, 30 * V).map((c) => toSpot(c, 0.62 * V));
-  const flowerSpots = pick(leafCells.filter((c) => c.e > 0.6), 46 * V).map((c) => toSpot(c, 0.56 * V));
+  // 枣子：只在每个冠簇的下半部、贴着外沿挂，成小组
+  const under = leafCells.filter((c) => c.e > 0.45 && c.y < c.cy && !grid.get(c.x, c.y - 1, c.z));
+  const fruitSpots = [];
+  for (const c of pickCells(under, Math.round(14 * V / 3))) {
+    const n = 1 + Math.floor(rng() * 2);
+    for (let k = 0; k < n; k++) {
+      fruitSpots.push({
+        x: (c.x + (rng() - 0.5) * 0.9) / V,
+        y: (c.y - 1.2 - rng() * 0.4) / V,
+        z: (c.z + (rng() - 0.5) * 0.9) / V,
+        v: hash3(c.x, c.y, c.z),
+      });
+    }
+  }
+  const flowerSpots = pickCells(leafCells.filter((c) => c.e > 0.45), Math.round(40 * V / 3)).map((c) => ({
+    x: c.x / V, y: (c.y - 0.4) / V, z: c.z / V, v: hash3(c.x, c.y, c.z),
+  }));
 
   // ---- 草地上的小花、河边芦苇 ----
   const groundFlowers = [];
-  for (let i = 0; i < 400 && groundFlowers.length < 150; i++) {
+  for (let i = 0; i < 900 && groundFlowers.length < 120; i++) {
     const x = (rng() * 2 - 1) * 20, z = (rng() * 2 - 1) * 20;
     const xb = Math.round(x * V), zb = Math.round(z * V);
     if (Math.hypot(x, z) > 20) continue;
+    // 成片开花：有花丛也有空草地
+    if (fbm(x * 0.16 + 4, z * 0.16 - 9) < 0.46) continue;
     if (getH(xb, zb) !== 0 || grid.get(xb, 0, zb) !== T.GRASS || grid.get(xb, 1, zb)) continue;
     if (Math.abs(z - riverZ(x)) < RIVER_HALF + 1.6) continue;
     if (Math.hypot(x - tb.x, z - tb.z) < 2) continue;
@@ -474,7 +600,7 @@ const PALETTE = {
 };
 const FIXED = {
   dirt: C('#8a5d3b'), stone: C('#948c7e'), sand: C('#dccb8e'), path: C('#ab9c80'), log: C('#6b4a2e'), logTop: C('#9c7a52'),
-  mud: C('#ece0c6'), plank: C('#b98a53'), cobble: C('#8b8172'), mlog: C('#5e4128'), tlog: C('#5b3b24'), tlogTop: C('#7d5a3a'),
+  mud: C('#ece0c6'), plank: C('#b98a53'), cobble: C('#8b8172'), mlog: C('#5e4128'), tlog: C('#7b5a3f'), tlogTop: C('#8c6742'),
   snow: C('#f2f6fa'), autumnYellow: C('#e8c23a'),
 };
 const SNOW_LINE = { spring: 25, summer: 99, autumn: 27, winter: -99 };
@@ -578,7 +704,8 @@ export function buildMesh(grid, filter, origin = [0, 0, 0]) {
           if (ao[0] + ao[2] < ao[1] + ao[3]) idx.push(vcount + 1, vcount + 2, vcount + 3, vcount + 1, vcount + 3, vcount);
           else idx.push(vcount, vcount + 1, vcount + 2, vcount, vcount + 2, vcount + 3);
           vcount += 4;
-          meta.push(t, f, y, v, ao[0], ao[1], ao[2], ao[3]);
+          const tint = vnoise(x * 0.018, z * 0.018) * 0.65 + vnoise(x * 0.06, z * 0.06) * 0.35;
+          meta.push(t, f, y, v, tint, ao[0], ao[1], ao[2], ao[3]);
         }
       }
     }
@@ -594,20 +721,20 @@ export function buildMesh(grid, filter, origin = [0, 0, 0]) {
 
   const colors = colorAttr.array;
   function recolor(season) {
-    const faces = meta.length / 8;
+    const faces = meta.length / 9;
     for (let i = 0; i < faces; i++) {
-      const m = i * 8;
+      const m = i * 9;
       faceColor(meta[m], meta[m + 1], meta[m + 2], meta[m + 3], season, tmp);
-      const shade = FACE_SHADE[meta[m + 1]];
+      const shade = FACE_SHADE[meta[m + 1]] * (0.93 + meta[m + 4] * 0.14);
       for (let k = 0; k < 4; k++) {
-        const s = shade * AO_CURVE[meta[m + 4 + k]];
+        const s = shade * AO_CURVE[meta[m + 5 + k]];
         const o = (i * 4 + k) * 3;
         colors[o] = tmp.r * s; colors[o + 1] = tmp.g * s; colors[o + 2] = tmp.b * s;
       }
     }
     colorAttr.needsUpdate = true;
   }
-  return { geometry, recolor, faces: meta.length / 8 };
+  return { geometry, recolor, faces: meta.length / 9 };
 }
 
 export const filters = {
