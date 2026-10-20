@@ -67,8 +67,12 @@ function fitCamera() {
 }
 {
   const a = innerWidth / innerHeight;
-  const dist = a < 0.8 ? 37 : 33;
-  const az = 0.62, pol = 1.34;
+  // V3.1 手机竖屏：默认稍微俯视、适度拉远，同时照顾小桥、小屋和枣树。
+  // 保持桌面原取景，不改变用户旋转/缩放后的 OrbitControls 操作。
+  const portraitTouch = isTouch && a < 0.8;
+  if (portraitTouch) controls.target.set(-2, 3, -2);
+  const dist = portraitTouch ? 44 : a < 0.8 ? 37 : 33;
+  const az = 0.62, pol = portraitTouch ? 1.18 : 1.34;
   camera.position.set(
     controls.target.x + dist * Math.sin(pol) * Math.sin(az),
     controls.target.y + dist * Math.cos(pol),
