@@ -309,9 +309,12 @@ body.has-dialog .identity-card { opacity: 0; visibility: hidden; pointer-events:
 .gb-admin-actions button{font-size:12px;padding:6px 9px;min-height:34px;}
 @media(max-width:640px){
 .identity-link{flex:1 1 calc(50% - 6px);}
-.gb-body{grid-template-columns:1fr;gap:16px;}
+.gb-body{grid-template-columns:1fr;gap:14px;}
 .gb-letters{order:-1;}
 #gb-list{max-height:none;overflow:visible;padding-right:0;}
-.gb-entry-head{flex-wrap:wrap;}
+/* 手机上一屏要放得下「投进信箱」，否则按钮正好被折叠线切一半 */
+.gb-form{gap:6px;padding:12px;}
+.gb-form textarea{height:88px;min-height:88px;}
 .gb-form button{min-height:44px;}
+.gb-entry-head{flex-wrap:wrap;}
 }
