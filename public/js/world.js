@@ -622,7 +622,13 @@ export function generateWorld() {
   for (let z = hz0; z <= hz1; z++) { grid.set(hx0, wy1, z, T.LOG); grid.set(hx1, wy1, z, T.LOG); }
   const br = Math.min(2, V);
   for (const [x, dx] of [[hx0, 1], [hx1, -1]]) {
-    for (let k = 1; k <= br; k++) { grid.set(x + dx * k, wy1 - k, hz1, T.LOG); grid.set(x + dx * k, wy1 - k, hz0, T.LOG); }
+    for (let k = 1; k <= br; k++) {
+      const beamX = x + dx * k, beamY = wy1 - k;
+      // 小体素移动版的窗更靠近墙角，前墙斜撑若进入窗洞必须让位。
+      // 背面斜撑仍保留，门、窗与屋顶轮廓不动。
+      if (!isWindowCell(beamX, beamY, hz1)) grid.set(beamX, beamY, hz1, T.LOG);
+      grid.set(beamX, beamY, hz0, T.LOG);
+    }
   }
   for (const [z, dz] of [[hz0, 1], [hz1, -1]]) {
     for (let k = 1; k <= br; k++) { grid.set(hx0, wy1 - k, z + dz * k, T.LOG); grid.set(hx1, wy1 - k, z + dz * k, T.LOG); }
