@@ -843,6 +843,8 @@ function applySeason() {
     flowerOrder.forEach((f, i) => petalMesh.setColorAt(i, tmpColor.set(pal[Math.floor(f.c * pal.length)])));
     petalMesh.instanceColor.needsUpdate = true;
   }
+  // 春夏略收曝光，高亮草地不再像荧光板；秋冬维持原有明度。
+  renderer.toneMappingExposure = (s === 'spring' || s === 'summer') ? 1.07 : 1.16;
   // 草叶跟着季节换色；冬天被雪盖住就收起来
   const tp = TUFT_COLORS[s] || TUFT_COLORS.summer;
   for (let j = 0; j < TUFT_INSTANCE_COUNT; j++) {

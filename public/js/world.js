@@ -882,8 +882,8 @@ const C = (hex) => new THREE.Color(hex);
 // 绘本配色的关键是「明度分层」：地面最亮、草与树最深、房子在中间调。
 // 之前四季都挤在中明度的黄绿调里，远看就糊成一团。
 const PALETTE = {
-  spring: { grass: C('#aee08c'), leafA: C('#79c063'), leafB: C('#93d078'), leafC: C('#4e8f52'), tleaf: C('#8ccf6c'), thatch: C('#ecd096'), crop: C('#79bd4e') },
-  summer: { grass: C('#86c96c'), leafA: C('#4f8f47'), leafB: C('#62a355'), leafC: C('#3a7045'), tleaf: C('#63a957'), thatch: C('#e3c48a'), crop: C('#8aa83f') },
+  spring: { grass: C('#abc49b'), grassDry: C('#c5ba96'), grassCool: C('#8fb8a5'), leafA: C('#83ab81'), leafB: C('#a2b98f'), leafC: C('#648c76'), tleaf: C('#99b58b'), thatch: C('#e5cfaa'), crop: C('#91ac78') },
+  summer: { grass: C('#90ac83'), grassDry: C('#b5b08a'), grassCool: C('#749b8b'), leafA: C('#668e72'), leafB: C('#8fa885'), leafC: C('#4f786d'), tleaf: C('#789a80'), thatch: C('#dcc398'), crop: C('#9aa877') },
   autumn: { grass: C('#dcc878'), leafA: C('#d99a54'), leafB: C('#c07a47'), leafC: C('#4f7d50'), tleaf: C('#c9a259'), thatch: C('#e0bd7f'), crop: C('#d19b33') },
   winter: { grass: C('#f2f7fb'), leafA: C('#8b857a'), leafB: C('#8b857a'), leafC: C('#3f6647'), tleaf: C('#8b857a'), thatch: C('#c8a672'), crop: C('#b9a37e') },
 };
@@ -896,14 +896,23 @@ const FIXED = {
 const SNOW_LINE = { spring: 99, summer: 99, autumn: 99, winter: -99 };
 
 const tmp = new THREE.Color(), tmpSide = new THREE.Color();
-function faceColor(t, dir, y, v, season, out) {
+function faceColor(t, dir, y, v, season, out, tint = 0.5) {
   const p = PALETTE[season];
   const yw = y / V;
   const snowy = dir === 2 && t !== T.WATER && (season === 'winter' ? t !== T.TLEAF : yw >= SNOW_LINE[season] && (t === T.STONE || t === T.GRASS || t === T.DIRT));
   if (snowy && !(t === T.MUD)) { out.copy(FIXED.snow); return out; }
   switch (t) {
     // 侧面直接用草色压暗一点。原来掺土色，方块减半后每一级台阶都会变成一条褐色横纹
-    case T.GRASS: out.copy(season === 'winter' ? FIXED.snow : p.grass); break;
+    case T.GRASS:
+      out.copy(season === 'winter' ? FIXED.snow : p.grass);
+      // 春夏用低频整片冷暖草地，而不是逐格棋盘色差；山丘随之有自然色带。
+      if (p.grassDry) {
+        const dry = smoothstep(0.51, 0.68, tint);
+        const cool = 1 - smoothstep(0.32, 0.48, tint);
+        out.lerp(p.grassDry, dry * 0.55);
+        out.lerp(p.grassCool, cool * 0.48);
+      }
+      break;
     case T.DIRT: out.copy(FIXED.dirt); break;
     // 岩体：高度做沉积层理，越高越偏冷；再叠一层低频斑驳当风化
     case T.STONE: out.copy(FIXED.stone).multiplyScalar(0.94 + v * 0.1); break;
@@ -1032,7 +1041,7 @@ export function buildMesh(grid, filter, origin = [0, 0, 0]) {
     const faces = meta.length / 9;
     for (let i = 0; i < faces; i++) {
       const m = i * 9;
-      faceColor(meta[m], meta[m + 1], meta[m + 2], meta[m + 3], season, tmp);
+      faceColor(meta[m], meta[m + 1], meta[m + 2], meta[m + 3], season, tmp, meta[m + 4]);
       const ground = isGround(meta[m]);
       const shade = (ground ? 1 : FACE_SHADE[meta[m + 1]]) * (0.96 + meta[m + 4] * 0.08);
       for (let k = 0; k < 4; k++) {
