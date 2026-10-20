@@ -6,8 +6,11 @@ export const T = {
   THATCH: 9, COBBLE: 10, MLOG: 11, LEAF_A: 12, LEAF_B: 13, LEAF_C: 14, TLOG: 15, TLEAF: 16, WATER: 17,
 };
 
-// 细分倍数：1 个原方块 = V^3 个小方块。V=2 时每块 0.5 个世界单位，世界尺寸不变。
-export const V = 2;
+// 细分倍数：1 个原方块 = V^3 个小方块，世界尺寸不变。
+// 桌面 3（每块 1/3 单位）；触屏退回 2——面数会从 42 万降到 19 万，
+// 顶点缓冲从 70MB 降到 31MB，这是手机能接受的量级。
+const COARSE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+export const V = COARSE ? 2 : 3;
 
 export const R = 56;                       // 世界半径（世界单位）
 const RB = R * V;                          // 世界半径（方块）
