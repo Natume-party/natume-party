@@ -398,7 +398,23 @@ export function generateWorld() {
     }
   }
 
-  for (const site of sites.slice(0, 30)) {
+  // V3.1: 候选点原先按 x 坐标顺序排列，只取前 30 棵会让地图一侧过密、另一侧荒凉。
+  // 独立随机源打散候选并按八个方位均衡选树，最多 32 棵，不扩大总模型开销。
+  const forestSites = [...sites];
+  const forestPick = mulberry32(20261021);
+  for (let i = forestSites.length - 1; i > 0; i--) {
+    const j = Math.floor(forestPick() * (i + 1));
+    [forestSites[i], forestSites[j]] = [forestSites[j], forestSites[i]];
+  }
+  const forestSectorCounts = new Array(8).fill(0), balancedForest = [];
+  for (const site of forestSites) {
+    const sector = Math.min(7, Math.floor((Math.atan2(site.zb, site.xb) + Math.PI) / (Math.PI * 2) * 8));
+    if (forestSectorCounts[sector] >= 4) continue;
+    balancedForest.push(site);
+    forestSectorCounts[sector]++;
+    if (balancedForest.length >= 32) break;
+  }
+  for (const site of balancedForest) {
     const { xb, zb, h } = site;
     const kind = rng();
     const pine = site.alt > 8 || (site.alt > 5 && kind < 0.45);
@@ -474,7 +490,7 @@ export function generateWorld() {
   // 贴合真实高度场；山脊留白，山脚略密，林缘聚集，避免填满每一个坡面。
   const hillShrubs = [], hillStones = [];
   const hillRng = mulberry32(20261020);
-  for (let i = 0; i < 4600 && (hillShrubs.length < 120 || hillStones.length < 180); i++) {
+  for (let i = 0; i < 4600 && (hillShrubs.length < 165 || hillStones.length < 180); i++) {
     const a = hillRng() * Math.PI * 2, r = 16 + Math.sqrt(hillRng()) * 34;
     const x = Math.cos(a) * r, z = Math.sin(a) * r;
     const xb = Math.round(x * V), zb = Math.round(z * V);
@@ -485,13 +501,13 @@ export function generateWorld() {
     if (isPath(x, z) || rectDist(HUT_ZONE, x, z) < 4 || rectDist(TREE_ZONE, x, z) < 4) continue;
     const patch = fbm(x * 0.085 + 7, z * 0.085 - 3);
     const exposed = fbm(x * 0.14 - 9, z * 0.14 + 12);
-    const onShrubPatch = patch > 0.465 && exposed > 0.31;
+    const onShrubPatch = patch > 0.45 && exposed > 0.29;
     // 山腰和山脚有元素，山顶只保留少量孤立岩石。
-    const shrub = onShrubPatch && hillRng() > 0.39 && hillShrubs.length < 120;
+    const shrub = onShrubPatch && hillRng() > 0.30 && hillShrubs.length < 165;
     const stone = (patch < 0.51 || exposed > 0.63) && hillStones.length < 180;
     const y = (h + 0.5) / V;
-    if (shrub && !hillShrubs.some(p => Math.hypot(p.x - x, p.z - z) < 1.45)) {
-      hillShrubs.push({ x, z, y, size: 0.45 + hillRng() * 0.6, rot: hillRng() * 6.283,
+    if (shrub && !hillShrubs.some(p => Math.hypot(p.x - x, p.z - z) < 1.6)) {
+      hillShrubs.push({ x, z, y, size: 0.57 + hillRng() * 0.63, rot: hillRng() * 6.283,
         v: hillRng() });
     } else if (stone && hillRng() < 0.58 && !hillStones.some(p => Math.hypot(p.x - x, p.z - z) < 1.05)) {
       hillStones.push({ x, z, y, size: 0.45 + hillRng() * 0.7, rot: hillRng() * 6.283,
