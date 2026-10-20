@@ -23,6 +23,11 @@ body {
 #app, #app canvas { position: fixed; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; }
 #app canvas { cursor: grab; }
 #app canvas:active { cursor: grabbing; }
+/* 很轻的暗角，让视线落在中间的小屋上 */
+body::after {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 2;
+  background: radial-gradient(120% 92% at 50% 46%, rgba(6, 11, 20, 0) 58%, rgba(6, 11, 20, .3) 100%);
+}
 
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
@@ -110,6 +115,8 @@ dialog {
   border: none; padding: 0; background: transparent; color: var(--ink);
   max-width: min(520px, calc(100vw - 2 * var(--gap))); width: 100%;
 }
+/* 留言簿要放得下「表单 + 来信」，单列挤在 520px 里永远要滚动 */
+dialog[data-tab="guestbook"] { max-width: min(680px, calc(100vw - 2 * var(--gap))); }
 dialog::backdrop { background: rgba(10, 14, 24, .45); backdrop-filter: blur(3px); }
 dialog[open] { animation: pop .28s ease; }
 @keyframes pop { from { transform: translateY(12px) scale(.97); opacity: 0; } }
@@ -117,16 +124,18 @@ dialog[open] { animation: pop .28s ease; }
   background: var(--paper); border-radius: 6px; padding: 22px 22px 18px; user-select: text;
   border: 4px solid #6b4a2e; box-shadow: 0 0 0 4px #3e2a19, 0 18px 40px rgba(0, 0, 0, .35);
   background-image: repeating-linear-gradient(0deg, transparent 0 15px, rgba(107, 74, 46, .06) 15px 16px);
+  display: flex; flex-direction: column;
+  max-height: calc(100dvh - var(--gap) * 2 - 28px);
 }
-.tabs { display: flex; gap: 6px; margin: -4px 0 14px; }
+.tabs { display: flex; gap: 6px; margin: -4px 0 14px; flex: none; }
 .tabs button {
   flex: 1; height: 38px; border: 2px solid #6b4a2e; border-radius: 4px; background: #efe4cc; color: var(--ink);
   font-weight: 700; letter-spacing: .06em; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .12);
 }
 .tabs button[aria-selected="true"] { background: #6b4a2e; color: #fbf6ea; box-shadow: none; }
 .md {
-  max-height: min(56vh, 520px); overflow-y: auto; overscroll-behavior: contain; margin: 0 -6px 16px; padding: 0 6px;
-  line-height: 1.75; outline: none;
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin: 0 -6px 16px; padding: 0 6px;
+  line-height: 1.75; outline: none; scrollbar-width: thin; scrollbar-color: rgba(107, 74, 46, .35) transparent;
 }
 .md[aria-busy="true"] { opacity: .5; }
 .md h2 { margin: 4px 0 10px; font-size: 20px; }
@@ -148,11 +157,13 @@ dialog[open] { animation: pop .28s ease; }
 .posts a { display: flex; gap: 12px; align-items: baseline; padding: 10px 2px; text-decoration: none; color: var(--ink); }
 .posts a:hover .title { text-decoration: underline; }
 .posts .title { font-weight: 600; }
+/* 关闭按钮退成次要动作：纸质描边，避免和「投进信箱」抢同一个绿色 */
 .primary {
-  display: block; width: 100%; height: 44px; border: none; border-radius: 4px;
-  background: #5d9a3c; color: #fff; font-weight: 700; letter-spacing: .1em;
-  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .22), inset 0 2px 0 rgba(255, 255, 255, .25);
+  display: block; flex: none; width: 100%; min-height: 44px; border: 2px solid #6b4a2e; border-radius: 6px;
+  background: #efe4cc; color: #4a3620; font-weight: 700; letter-spacing: .1em;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .08);
 }
+.primary:hover { background: #e6d6b6; }
 .primary:active { transform: translateY(1px); }
 
 
@@ -182,8 +193,8 @@ body.no-ui .hud, body.no-ui #hint, body.no-ui #toast, body.no-ui #panel-toggle {
   #panel { bottom: calc(var(--gap) + env(safe-area-inset-bottom) + 46px); }
   #panel.collapsed { display: none; }
   #hint { bottom: calc(var(--gap) + env(safe-area-inset-bottom) + 52px); font-size: 12px; }
-  .tabs button { height: 36px; letter-spacing: .02em; }
-  .card-body { padding: 18px 16px 14px; }
+  .tabs button { height: 44px; letter-spacing: .02em; }
+  .card-body { padding: 18px 16px 14px; max-height: calc(100dvh - var(--gap) * 2 - 12px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -205,7 +216,10 @@ body.no-ui .hud, body.no-ui #hint, body.no-ui #toast, body.no-ui #panel-toggle {
   box-shadow: 0 18px 52px rgba(13, 20, 28, .24), inset 0 1px 0 rgba(255, 255, 255, .12);
   backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   text-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+  transition: opacity .22s ease, visibility .22s ease;
 }
+/* 小屋弹窗打开时收起名片：1280/1366 上它原本会从纸片后面探出来 */
+body.has-dialog .identity-card { opacity: 0; visibility: hidden; pointer-events: none; }
 .identity-eyebrow { display: flex; align-items: center; gap: 9px; margin: 0 0 15px; color: #ffe3a4; font-size: 10px; font-weight: 700; letter-spacing: .19em; }
 .identity-spark { display: inline-block; width: 7px; height: 7px; border-radius: 2px; transform: rotate(45deg); background: #ffd36b; box-shadow: 0 0 10px rgba(255, 211, 107, .55); }
 .identity-title { margin: 0; color: #fffdf5; font-size: clamp(24px, 2.15vw, 32px); line-height: 1.3; font-weight: 700; letter-spacing: -.025em; }
@@ -253,33 +267,51 @@ body.no-ui .hud, body.no-ui #hint, body.no-ui #toast, body.no-ui #panel-toggle {
 }
 
 /* Natume guestbook styling; inherits the hut's paper and brown ink palette. */
-.guestbook { display:grid;gap:12px; }
+.guestbook { display:flex; flex-direction:column; gap:14px; }
 .guestbook h2,.guestbook h3 { margin:0; }
+.gb-head { display:flex; flex-direction:column; gap:5px; }
+.gb-head h2 { display:flex; align-items:center; gap:8px; }
+.gb-icon { width:19px; height:19px; flex:none; color:#8a5a2c; }
 .gb-intro { color:#78634a; margin:0!important; }
-.gb-form { display:grid;gap:7px;padding:13px;background:rgba(255,255,255,.72);border:1px solid #dfcdb2;border-radius:8px; }
-.gb-form label,#gb-login label { font-size:12px;font-weight:700; }
+.gb-body { display:grid; grid-template-columns:minmax(0,258px) minmax(0,1fr); gap:18px; align-items:start; }
+.gb-form { display:flex; flex-direction:column; gap:7px; padding:14px; background:rgba(255,255,255,.4); border:1px solid rgba(107,74,46,.26); border-radius:6px; }
+.gb-form label,#gb-login label { font-size:12px; font-weight:700; }
 .gb-form input,.gb-form textarea,#gb-login input,.gb-owner textarea {width:100%;padding:9px;border:1px solid #baa98e;border-radius:6px;background:#fffdf8;color:#2e2a22;font:inherit;min-width:0;resize:vertical;}
 .gb-form small { color:#7a674f;line-height:1.5; }
-.gb-form button,.gb-head button,.gb-owner button {background:#557949;color:#fff;border:0;border-radius:6px;padding:8px 12px;min-height:36px;font-weight:700;}
+.gb-form button,.gb-owner button {background:#557949;color:#fff;border:0;border-radius:6px;padding:8px 12px;min-height:42px;font-weight:700;}
+.gb-form button:hover,.gb-owner button:hover { background:#4a6b40; }
 .gb-form button:disabled,.gb-owner button:disabled { opacity:.6; }
 #gb-status {margin:0!important;font-size:13px;color:#a33a27;min-height:1em;}
 #gb-status.ok,#gb-owner-status.ok{color:#487841;}
-.gb-head {display:flex;align-items:center;justify-content:space-between;}
-.gb-head button{background:#bdac90;color:#332819;min-height:30px;padding:5px 10px;}
-.gb-entry,.gb-admin-entry {padding:10px 0;border-bottom:1px dashed #cdb99c;}
+.gb-letters { display:flex; flex-direction:column; gap:8px; min-width:0; }
+.gb-head-row {display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.gb-head-row h3 { font-size:16px; }
+.gb-head-row button{background:#bdac90;color:#332819;border:0;border-radius:6px;min-height:36px;padding:5px 12px;font-weight:700;font-size:13px;}
+.gb-head-row button:hover{background:#b0a084;}
+#gb-list { max-height:min(38vh,330px); overflow-y:auto; overscroll-behavior:contain; padding-right:4px; scrollbar-width:thin; scrollbar-color:rgba(107,74,46,.35) transparent; }
+.gb-entry,.gb-admin-entry {padding:12px 0;border-bottom:1px dashed #cdb99c;}
+.gb-entry:first-child { padding-top:2px; }
+.gb-entry:last-child { border-bottom:0; }
 .gb-entry-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline;}
-.gb-entry-head time{color:#89735b;font-size:12px;}
+.gb-entry-head strong { font-size:14px; }
+.gb-entry-head time{color:#89735b;font-size:12px;font-variant-numeric:tabular-nums;}
 .gb-text {white-space:pre-wrap;overflow-wrap:anywhere;margin:5px 0!important;}
-.gb-reply{margin:10px 0 0 15px;padding:9px 11px;background:#ecf0df;border-left:3px solid #78a36b;border-radius:0 7px 7px 0;}
-.gb-reply strong{color:#487841;}
+.gb-reply{margin:10px 0 0 12px;padding:9px 11px;background:#ecf0df;border-left:3px solid #78a36b;border-radius:0 7px 7px 0;}
+.gb-reply strong{color:#487841;font-size:12px;letter-spacing:.04em;}
 .gb-reply p{white-space:pre-wrap;overflow-wrap:anywhere;margin:3px 0 0!important;}
-.gb-empty{font-size:13px;color:#796549;}
-.gb-owner{border-top:1px dashed #c8b597;padding:9px 0;font-size:12px;}
+.gb-empty{font-size:13px;color:#796549;border:1px dashed #cdb99c;border-radius:6px;padding:14px;text-align:center;}
+.gb-owner{border-top:1px dashed #c8b597;padding:9px 0 0;font-size:12px;}
 .gb-owner summary{color:#79664b;cursor:pointer;}
+.gb-owner[open] summary{color:#4a3620;font-weight:700;}
 #gb-login{display:grid;gap:7px;padding:10px 0;}
+.gb-admin-entry strong{font-size:13px;}
 .gb-admin-actions{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap;}
-.gb-admin-actions button{font-size:12px;padding:5px 8px;}
+.gb-admin-actions button{font-size:12px;padding:6px 9px;min-height:34px;}
 @media(max-width:640px){
 .identity-link{flex:1 1 calc(50% - 6px);}
+.gb-body{grid-template-columns:1fr;gap:16px;}
+.gb-letters{order:-1;}
+#gb-list{max-height:none;overflow:visible;padding-right:0;}
 .gb-entry-head{flex-wrap:wrap;}
+.gb-form button{min-height:44px;}
 }

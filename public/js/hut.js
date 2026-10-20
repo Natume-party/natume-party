@@ -75,6 +75,7 @@ export function initHut({ onClose } = {}) {
 
   async function render(route) {
     const my = ++token;
+    dialog.dataset.tab = route.tab;
     tabs.forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === route.tab)));
     content.setAttribute('aria-busy', 'true');
     if (route.tab === 'guestbook') {
@@ -112,6 +113,7 @@ export function initHut({ onClose } = {}) {
   function show(route) {
     current = route;
     if (!dialog.open) dialog.showModal();
+    document.body.classList.add('has-dialog');
     render(route);
   }
 
@@ -125,6 +127,7 @@ export function initHut({ onClose } = {}) {
   dialog.addEventListener('close', () => {
     if (dialog.open) return; // 关闭事件晚到时对话框可能已被重新打开
     current = null;
+    document.body.classList.remove('has-dialog');
     if (parse(location.hash)) history.replaceState(null, '', location.pathname + location.search);
     onClose?.();
   });

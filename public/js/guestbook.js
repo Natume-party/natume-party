@@ -13,18 +13,23 @@ async function api(path='',options={}) {
   return body;
 }
 const jsonHeaders={'Content-Type':'application/json'};
+const ENVELOPE='<svg class="gb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5.5" width="18" height="13" rx="1.6"/><path d="M3.6 7.2 12 12.9l8.4-5.7"/></svg>';
+const fmtDate=(ts)=>{const d=new Date(ts*1000);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
 export async function renderGuestbook(host) {
   host.innerHTML=[
-    '<section class="guestbook"><h2>✉️ 河边留言簿</h2>',
-    '<p class="gb-intro">路过的小伙伴，留句话吧。我会时不时回来看看。</p>',
+    '<section class="guestbook"><header class="gb-head"><h2>'+ENVELOPE+'河边留言簿</h2>',
+    '<p class="gb-intro">路过的小伙伴，留句话吧。我会时不时回来看看。</p></header>',
+    '<div class="gb-body">',
     '<form id="gb-form" class="gb-form"><label for="gb-name">怎么称呼你？</label>',
     '<input id="gb-name" maxlength="32" required placeholder="你的昵称" autocomplete="nickname">',
     '<label for="gb-msg">想说些什么？</label>',
     '<textarea id="gb-msg" maxlength="500" rows="3" required placeholder="给 Natume 留一句话…"></textarea>',
     '<small>留言审核后公开，请勿留下手机号、住址等私人资料。</small>',
     '<button type="submit">投进信箱 ↗</button><p id="gb-status" role="status"></p></form>',
-    '<div class="gb-head"><h3>河边的来信</h3><button type="button" id="gb-refresh">刷新</button></div>',
-    '<div id="gb-list" aria-live="polite">正在读信…</div>',
+    '<section class="gb-letters"><div class="gb-head-row"><h3>河边的来信</h3>',
+    '<button type="button" id="gb-refresh">刷新</button></div>',
+    '<div id="gb-list" aria-live="polite">正在读信…</div></section>',
+    '</div>',
     '<details class="gb-owner"><summary>Natume 管理留言</summary>',
     '<form id="gb-login"><label for="gb-key">管理员密钥（不保存到浏览器）</label>',
     '<input id="gb-key" type="password" required autocomplete="off" placeholder="输入管理员密钥">',
@@ -41,7 +46,7 @@ export async function renderGuestbook(host) {
       if(!messages.length){list.append(make('p','gb-empty','还没有公开留言。你可以留下第一封信。'));return;}
       for(const x of messages){
         const box=make('article','gb-entry'),head=make('div','gb-entry-head');
-        head.append(make('strong','',x.author),make('time','',new Date(x.createdAt*1000).toLocaleDateString('zh-CN')));
+        head.append(make('strong','',x.author),make('time','',fmtDate(x.createdAt)));
         box.append(head,make('p','gb-text',x.message));
         if(x.reply) {
           const reply=make('div','gb-reply');
@@ -98,6 +103,15 @@ export async function renderGuestbook(host) {
   $('#gb-logout').addEventListener('click',()=>{
     adminKey='';$('#gb-login').hidden=false;$('#gb-logout').hidden=true;
     adminList.replaceChildren();feedback($('#gb-owner-status'),'已退出');
+  });
+  // 展开管理区后把登录框带进视野：卡片本身是滚动容器，否则点了像没反应
+  const owner=$('.gb-owner');
+  owner.addEventListener('toggle',()=>{
+    if(!owner.open)return;
+    requestAnimationFrame(()=>{
+      const target=$('#gb-login').hidden?adminList:$('#gb-key');
+      target?.scrollIntoView({block:'center',behavior:'smooth'});
+    });
   });
   await refresh();
 }

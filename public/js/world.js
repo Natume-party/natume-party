@@ -6,17 +6,22 @@ export const T = {
   THATCH: 9, COBBLE: 10, MLOG: 11, LEAF_A: 12, LEAF_B: 13, LEAF_C: 14, TLOG: 15, TLEAF: 16, WATER: 17,
 };
 
-export const R = 56;
-const O = R + 4;
+// 细分倍数：1 个原方块 = V^3 个小方块。V=2 时每块 0.5 个世界单位，世界尺寸不变。
+export const V = 2;
+
+export const R = 56;                       // 世界半径（世界单位）
+const RB = R * V;                          // 世界半径（方块）
+const O = RB + 4 * V;
 const W = 2 * O + 1;
-const YMIN = -6;
-const YMAX = 52;
+const YMIN = -6 * V;
+const YMAX = 52 * V;
 const YH = YMAX - YMIN + 1;
 
+// 以下对外导出的数值一律是「世界单位」，main.js 不用关心细分倍数。
 export const RIVER_HALF = 2.3;
 export const riverZ = (x) => 3 + 4 * Math.sin(x * 0.11) + 2 * Math.sin(x * 0.047 + 1.3);
 
-// 房屋、枣树、小路的位置
+// 房屋、枣树、小路的位置（世界单位）
 export const HUT = { x0: -12, x1: -6, z0: -11, z1: -7, doorX: -9 };
 const HUT_ZONE = { x0: -15, x1: -3, z0: -14, z1: -5 };
 export const TREE = { x: 6, z: -3 };
@@ -88,14 +93,16 @@ function baseHeight(x, z) {
   return h;
 }
 
-function heightAt(x, z) {
-  const rd = Math.abs(z - riverZ(x));
-  if (rd < RIVER_HALF) return -1;
-  const flat = Math.min(rectDist(HUT_ZONE, x, z), rectDist(TREE_ZONE, x, z));
-  let h = Math.floor(baseHeight(x, z) * smoothstep(0, 7, flat));
-  const valley = Math.floor((rd - RIVER_HALF) * 1.15);
-  if (h > valley) h = Math.max(0, valley);
-  return Math.min(h, YMAX - 10);
+// 方块坐标 -> 世界坐标的高度采样；返回值是方块高度（整数）
+function heightAtBlock(xb, zb) {
+  const xw = xb / V, zw = zb / V;
+  const rd = Math.abs(zw - riverZ(xw));
+  if (rd < RIVER_HALF) return -V;
+  const flat = Math.min(rectDist(HUT_ZONE, xw, zw), rectDist(TREE_ZONE, xw, zw));
+  let hw = baseHeight(xw, zw) * smoothstep(0, 7, flat);
+  const valley = (rd - RIVER_HALF) * 1.15;
+  if (hw > valley) hw = Math.max(0, valley);
+  return Math.min(Math.round(hw * V), YMAX - 10 * V);
 }
 
 export function generateWorld() {
@@ -104,85 +111,100 @@ export function generateWorld() {
   const heights = new Int16Array(W * W).fill(-99);
   const hIdx = (x, z) => (x + O) * W + (z + O);
   const getH = (x, z) => (x < -O || x > O || z < -O || z > O) ? -99 : heights[hIdx(x, z)];
+  // 把 1 个世界方块写成 V^3 个小方块（房屋、树干这类整块结构）。
+  // 起点偏移 -V+1：小方块中心在 b/V，这样 yw 这一层正好落在世界 [yw-0.5, yw+0.5]。
+  const cell0 = (c) => c * V - V + 1;
+  const fillCell = (xw, yw, zw, t) => {
+    const x0 = cell0(xw), y0 = cell0(yw), z0 = cell0(zw);
+    for (let i = 0; i < V; i++) for (let j = 0; j < V; j++) for (let k = 0; k < V; k++)
+      grid.set(x0 + i, y0 + j, z0 + k, t);
+  };
 
   // 小路范围：从屋门向南穿过小桥
   const rzDoor = riverZ(HUT.doorX);
   const pathZ1 = Math.ceil(rzDoor + RIVER_HALF) + 5;
-  const isPath = (x, z) => x >= PATH_X0 && x <= PATH_X1 && z >= HUT.z1 + 1 && z <= pathZ1;
+  const isPath = (xw, zw) => xw >= PATH_X0 && xw <= PATH_X1 && zw >= HUT.z1 + 1 && zw <= pathZ1;
 
-  for (let x = -R; x <= R; x++) {
-    for (let z = -R; z <= R; z++) {
-      if (Math.hypot(x, z) > R + 0.5) continue;
-      heights[hIdx(x, z)] = heightAt(x, z);
+  for (let xb = -RB; xb <= RB; xb++) {
+    for (let zb = -RB; zb <= RB; zb++) {
+      if (Math.hypot(xb, zb) > RB + 0.5 * V) continue;
+      heights[hIdx(xb, zb)] = heightAtBlock(xb, zb);
     }
   }
 
-  for (let x = -R; x <= R; x++) {
-    for (let z = -R; z <= R; z++) {
-      const h = getH(x, z);
+  for (let xb = -RB; xb <= RB; xb++) {
+    for (let zb = -RB; zb <= RB; zb++) {
+      const h = getH(xb, zb);
       if (h === -99) continue;
-      const rd = Math.abs(z - riverZ(x));
+      const xw = xb / V, zw = zb / V;
+      const rd = Math.abs(zw - riverZ(xw));
       const river = rd < RIVER_HALF;
       let minN = h;
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const n = getH(x + dx, z + dz);
+        const n = getH(xb + dx, zb + dz);
         minN = Math.min(minN, n === -99 ? YMIN : n);
       }
-      const steep = h - minN >= 3 && h > 4;
-      const rocky = h > 13 + fbm(x * 0.2, z * 0.2) * 8;
-      for (let y = YMIN + 1; y <= h; y++) {
-        const depth = h - y;
+      const steep = h - minN >= 3 * V && h > 4 * V;
+      const rocky = h > (13 + fbm(xw * 0.2, zw * 0.2) * 8) * V;
+      for (let yb = YMIN + 1; yb <= h; yb++) {
+        const depth = h - yb;
         let t;
         if (depth === 0) {
           if (river) t = T.SAND;
-          else if (isPath(x, z)) t = T.PATH;
+          else if (isPath(xw, zw)) t = T.PATH;
           else if (h <= 0 && rd < RIVER_HALF + 1.3) t = T.SAND;
           else if (steep || rocky) t = T.STONE;
           else t = T.GRASS;
-        } else if (depth <= 2 && !steep && !rocky) t = river ? T.SAND : T.DIRT;
+        // 草层保持约 1 个世界单位厚：台阶侧壁才不会被土色切成一圈圈横纹
+        } else if (!steep && !rocky && depth < V) t = river ? T.SAND : T.GRASS;
+        else if (depth <= 2 * V && !steep && !rocky) t = river ? T.SAND : T.DIRT;
         else t = T.STONE;
-        grid.set(x, y, z, t);
+        grid.set(xb, yb, zb, t);
       }
-      if (river) grid.set(x, 0, z, T.WATER);
+      if (river) grid.set(xb, 0, zb, T.WATER);
     }
   }
 
   // ---- 山上的树 ----
-  for (let x = -R + 2; x <= R - 2; x++) {
-    for (let z = -R + 2; z <= R - 2; z++) {
-      const d = Math.hypot(x, z);
-      if (d < 17 || d > 47) continue;
-      const h = getH(x, z);
-      if (h < 0 || h > 30) continue;
-      if (Math.abs(z - riverZ(x)) < RIVER_HALF + 2.5) continue;
-      if (rectDist(HUT_ZONE, x, z) < 3 || rectDist(TREE_ZONE, x, z) < 3) continue;
-      if (grid.get(x, h, z) !== T.GRASS) continue;
-      if (rng() > 0.05) continue;
+  for (let xb = -RB + 2 * V; xb <= RB - 2 * V; xb++) {
+    for (let zb = -RB + 2 * V; zb <= RB - 2 * V; zb++) {
+      const xw = xb / V, zw = zb / V;
+      const d = Math.hypot(xw, zw);
+      // 近景留白：太靠近默认机位的树会挡住小屋
+      if (d < 23 || d > 47) continue;
+      const h = getH(xb, zb);
+      if (h < 0 || h > 30 * V) continue;
+      if (Math.abs(zw - riverZ(xw)) < RIVER_HALF + 2.5) continue;
+      if (rectDist(HUT_ZONE, xw, zw) < 3 || rectDist(TREE_ZONE, xw, zw) < 3) continue;
+      if (grid.get(xb, h, zb) !== T.GRASS) continue;
+      if (rng() > 0.05 / (V * V)) continue;
       let crowded = false;
-      for (let dx = -2; dx <= 2 && !crowded; dx++) for (let dz = -2; dz <= 2; dz++) {
-        if (grid.get(x + dx, h + 3, z + dz) || grid.get(x + dx, h + 2, z + dz)) { crowded = true; break; }
+      for (let dx = -2 * V; dx <= 2 * V && !crowded; dx++) for (let dz = -2 * V; dz <= 2 * V; dz++) {
+        if (grid.get(xb + dx, h + 3 * V, zb + dz) || grid.get(xb + dx, h + 2 * V, zb + dz)) { crowded = true; break; }
       }
       if (crowded) continue;
       const kindR = rng();
       const leaf = kindR < 0.4 ? T.LEAF_C : kindR < 0.7 ? T.LEAF_A : T.LEAF_B;
-      const th = 2 + Math.floor(rng() * 2);
-      for (let y = 1; y <= th + 1; y++) grid.set(x, h + y, z, T.MLOG);
-      const put = (dx, dy, dz) => { if (!grid.get(x + dx, h + dy, z + dz)) grid.set(x + dx, h + dy, z + dz, leaf); };
+      const th = (2 + Math.floor(rng() * 2)) * V;
+      for (let i = 0; i < V; i++) for (let k = 0; k < V; k++) {
+        for (let y = 1; y <= th + V; y++) grid.set(xb + i, h + y, zb + k, T.MLOG);
+      }
+      const put = (dx, dy, dz) => { if (!grid.get(xb + dx, h + dy, zb + dz)) grid.set(xb + dx, h + dy, zb + dz, leaf); };
       if (leaf === T.LEAF_C) {
         // 松树：分层收窄
-        for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+        for (let dx = -2 * V; dx <= 2 * V; dx++) for (let dz = -2 * V; dz <= 2 * V; dz++) {
           const m = Math.abs(dx) + Math.abs(dz);
-          if (m <= 3) put(dx, th, dz);
-          if (m <= 2) put(dx, th + 1, dz);
-          if (m <= 1) put(dx, th + 2, dz);
+          if (m <= 3 * V) put(dx, th, dz);
+          if (m <= 2 * V) put(dx, th + V, dz);
+          if (m <= V) put(dx, th + 2 * V, dz);
         }
-        put(0, th + 3, 0);
+        put(0, th + 3 * V, 0);
       } else {
         // 阔叶树：圆团
-        for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) for (let dy = 0; dy <= 2; dy++) {
-          if (Math.abs(dx) === 2 && Math.abs(dz) === 2) continue;
-          if (dy === 2 && (Math.abs(dx) === 2 || Math.abs(dz) === 2)) continue;
-          if (rng() < 0.08) continue;
+        for (let dx = -2 * V; dx <= 2 * V; dx++) for (let dz = -2 * V; dz <= 2 * V; dz++) for (let dy = 0; dy <= 2 * V; dy++) {
+          if (Math.abs(dx) === 2 * V && Math.abs(dz) === 2 * V) continue;
+          if (dy === 2 * V && (Math.abs(dx) === 2 * V || Math.abs(dz) === 2 * V)) continue;
+          if (rng() < 0.06) continue;
           put(dx, th + dy, dz);
         }
       }
@@ -200,28 +222,43 @@ export function generateWorld() {
       for (let y = 1; y <= 3; y++) {
         const key = `${x},${y},${z}`;
         if (x === HUT.doorX && z === HUT.z1 && y <= 2) continue;
-        if (winSet.has(key)) { windows.push({ x, y, z, axis: edgeZ && !edgeX ? 'z' : 'x' }); continue; }
-        grid.set(x, y, z, edgeX && edgeZ ? T.LOG : (y === 3 ? T.LOG : T.MUD));
+        if (winSet.has(key)) {
+          // 记录窗洞在小方块网格里的真实中心，窗口模型才能正好盖住洞口
+          const cx = (cell0(x) + (V - 1) / 2) / V;
+          const cy = (cell0(y) + (V - 1) / 2) / V;
+          const cz = (cell0(z) + (V - 1) / 2) / V;
+          windows.push({ x: cx, y: cy, z: cz, axis: edgeZ && !edgeX ? 'z' : 'x' });
+          continue;
+        }
+        fillCell(x, y, z, edgeX && edgeZ ? T.LOG : (y === 3 ? T.LOG : T.MUD));
       }
     }
   }
-  for (let k = 0; k <= 3; k++) {
-    for (let x = HUT.x0 - 1; x <= HUT.x1 + 1; x++) {
-      for (let z = HUT.z0 - 1 + k; z <= HUT.z1 + 1 - k; z++) grid.set(x, 4 + k, z, T.THATCH);
+  // 屋顶：比墙更细的台阶，每 V 层收进 1 个世界方块
+  for (let k = 0; k < 4 * V; k++) {
+    const inset = Math.floor(k / V);
+    const yb = cell0(4) + k;
+    for (let xb = cell0(HUT.x0 - 1); xb <= (HUT.x1 + 1) * V; xb++) {
+      for (let zb = cell0(HUT.z0 - 1 + inset); zb <= (HUT.z1 + 1 - inset) * V; zb++) {
+        grid.set(xb, yb, zb, T.THATCH);
+      }
     }
   }
   const chimney = { x: -7, z: -10 };
-  for (let y = 4; y <= 8; y++) grid.set(chimney.x, y, chimney.z, T.COBBLE);
+  for (let yb = cell0(4); yb <= cell0(9); yb++) {
+    for (let i = 0; i < V; i++) for (let k = 0; k < V; k++) grid.set(cell0(chimney.x) + i, yb, cell0(chimney.z) + k, T.COBBLE);
+  }
 
   // ---- 枣树 ----
   const tb = TREE;
   const trunk = [[0, 1, 0], [0, 2, 0], [0, 3, 0], [0, 4, 0], [1, 1, 0], [0, 1, 1],
     [0, 5, 0], [0, 6, 0], [-1, 4, 0], [-2, 5, 0], [1, 4, 0], [2, 5, 0], [2, 6, 1], [0, 5, -1], [0, 6, -2], [0, 5, 1], [0, 6, 2]];
-  for (const [dx, dy, dz] of trunk) grid.set(tb.x + dx, dy, tb.z + dz, T.TLOG);
-  const leafCenter = { x: tb.x, y: 7, z: tb.z };
-  const rx = 4.2, ry = 2.7, rz = 3.8;
+  for (const [dx, dy, dz] of trunk) fillCell(tb.x + dx, dy, tb.z + dz, T.TLOG);
+  // 树冠按小方块生成，比原来圆滑
+  const leafCenter = { x: tb.x * V, y: 7 * V, z: tb.z * V };
+  const rx = 4.2 * V, ry = 2.7 * V, rz = 3.8 * V;
   const leafCells = [];
-  for (let dx = -5; dx <= 5; dx++) for (let dy = -3; dy <= 3; dy++) for (let dz = -5; dz <= 5; dz++) {
+  for (let dx = -5 * V; dx <= 5 * V; dx++) for (let dy = -3 * V; dy <= 3 * V; dy++) for (let dz = -5 * V; dz <= 5 * V; dz++) {
     const e = (dx / rx) ** 2 + (dy / ry) ** 2 + (dz / rz) ** 2;
     if (e > 1) continue;
     const x = leafCenter.x + dx, y = leafCenter.y + dy, z = leafCenter.z + dz;
@@ -230,8 +267,8 @@ export function generateWorld() {
     grid.set(x, y, z, T.TLEAF);
     leafCells.push({ x, y, z, e, dx, dy, dz });
   }
-  // 挂在树冠外侧的枣子和枣花
-  const outer = leafCells.filter((c) => c.e > 0.6 && c.dy <= 1);
+  // 挂在树冠外侧的枣子和枣花（方块坐标，导出时换算回世界单位）
+  const outer = leafCells.filter((c) => c.e > 0.6 && c.dy <= V);
   const pick = (arr, n) => {
     const a = arr.slice(), out = [];
     while (out.length < n && a.length) out.push(a.splice(Math.floor(rng() * a.length), 1)[0]);
@@ -240,22 +277,22 @@ export function generateWorld() {
   const toSpot = (c, push) => {
     const len = Math.hypot(c.dx / rx, c.dy / ry, c.dz / rz) || 1;
     return {
-      x: c.x + (c.dx / rx / len) * push,
-      y: c.y + (c.dy / ry / len) * push * 0.6 - 0.25,
-      z: c.z + (c.dz / rz / len) * push,
+      x: (c.x + (c.dx / rx / len) * push) / V,
+      y: (c.y + (c.dy / ry / len) * push * 0.6 - 0.25 * V) / V,
+      z: (c.z + (c.dz / rz / len) * push) / V,
       v: hash3(c.x, c.y, c.z),
     };
   };
-  const fruitSpots = pick(outer, 30).map((c) => toSpot(c, 0.62));
-  const flowerSpots = pick(leafCells.filter((c) => c.e > 0.6), 46).map((c) => toSpot(c, 0.56));
+  const fruitSpots = pick(outer, 30 * V).map((c) => toSpot(c, 0.62 * V));
+  const flowerSpots = pick(leafCells.filter((c) => c.e > 0.6), 46 * V).map((c) => toSpot(c, 0.56 * V));
 
   // ---- 草地上的小花、河边芦苇 ----
   const groundFlowers = [];
   for (let i = 0; i < 400 && groundFlowers.length < 150; i++) {
     const x = (rng() * 2 - 1) * 20, z = (rng() * 2 - 1) * 20;
-    const xi = Math.round(x), zi = Math.round(z);
+    const xb = Math.round(x * V), zb = Math.round(z * V);
     if (Math.hypot(x, z) > 20) continue;
-    if (getH(xi, zi) !== 0 || grid.get(xi, 0, zi) !== T.GRASS || grid.get(xi, 1, zi)) continue;
+    if (getH(xb, zb) !== 0 || grid.get(xb, 0, zb) !== T.GRASS || grid.get(xb, 1, zb)) continue;
     if (Math.abs(z - riverZ(x)) < RIVER_HALF + 1.6) continue;
     if (Math.hypot(x - tb.x, z - tb.z) < 2) continue;
     groundFlowers.push({ x, z, c: rng(), s: 0.7 + rng() * 0.5, v: rng() });
@@ -266,9 +303,9 @@ export function generateWorld() {
       if (rng() > 0.32) continue;
       const z = riverZ(x) + side * (RIVER_HALF + 0.2 + rng() * 0.9);
       if (x >= PATH_X0 - 1 && x <= PATH_X1 + 1) continue;
-      const zi = Math.round(z);
-      const h = getH(x, zi);
-      if (h !== 0 || grid.get(x, 1, zi)) continue;
+      const zb = Math.round(z * V), xb = Math.round(x * V);
+      const h = getH(xb, zb);
+      if (h !== 0 || grid.get(xb, 1, zb)) continue;
       reeds.push({ x: x + (rng() - 0.5) * 0.6, z, h: 1 + rng() * 0.8, v: rng() });
     }
   }
@@ -286,11 +323,18 @@ export function generateWorld() {
   for (let x = -O; x <= O; x++) for (let z = -O; z <= O; z++) {
     for (let y = YMAX; y >= YMIN; y--) if (grid.get(x, y, z)) { tops[hIdx(x, z)] = y; break; }
   }
-  const topAt = (x, z) => (x < -O || x > O || z < -O || z > O) ? -99 : tops[hIdx(x, z)];
+  const topAt = (xw, zw) => {
+    const x = Math.round(xw * V), z = Math.round(zw * V);
+    if (x < -O || x > O || z < -O || z > O) return -99;
+    const t = tops[hIdx(x, z)];
+    return t === -99 ? -99 : t / V;
+  };
+  // 对外：世界坐标进，世界高度出
+  const heightAtWorld = (xw, zw) => heightAtBlock(Math.round(xw * V), Math.round(zw * V)) / V;
 
   return {
-    grid, getH, topAt, windows, chimney, fruitSpots, flowerSpots, groundFlowers, reeds, bridge,
-    door: { x: HUT.doorX, z: HUT.z1 },
+    grid, getH: heightAtWorld, topAt, windows, chimney, fruitSpots, flowerSpots, groundFlowers, reeds, bridge,
+    door: { x: (cell0(HUT.doorX) + (V - 1) / 2) / V, z: HUT.z1 },
   };
 }
 
@@ -316,11 +360,11 @@ export function makeAtlas() {
     px(3, x, y, (x % 4 === 1 ? 0.7 : 0.88 + rnd() * 0.12));
     const rr = Math.hypot(x - 7.5, y - 7.5);
     px(4, x, y, (Math.floor(rr) % 3 === 0 ? 0.72 : 0.92) + rnd() * 0.06);
-    px(5, x, y, ((x + Math.floor(y / 3)) % 3 === 0 ? 0.72 : 0.92 + rnd() * 0.08));
-    px(6, x, y, r < 0.18 ? 0.62 : 0.84 + rnd() * 0.16);
-    px(7, x, y, r < 0.06 ? 0.75 : 0.93 + rnd() * 0.07);
-    px(8, x, y, r < 0.3 ? 0.7 : 0.88 + rnd() * 0.12);
-    px(9, x, y, r < 0.12 ? 0.78 : 0.9 + rnd() * 0.1);
+    px(5, x, y, ((x + Math.floor(y / 3)) % 3 === 0 ? 0.82 : 0.94 + rnd() * 0.06));
+    px(6, x, y, r < 0.18 ? 0.78 : 0.87 + rnd() * 0.11);
+    px(7, x, y, r < 0.06 ? 0.82 : 0.94 + rnd() * 0.05);
+    px(8, x, y, r < 0.3 ? 0.78 : 0.9 + rnd() * 0.09);
+    px(9, x, y, r < 0.12 ? 0.84 : 0.92 + rnd() * 0.08);
   }
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -366,7 +410,8 @@ function faceColor(t, dir, y, v, season, out) {
   const snowy = dir === 2 && t !== T.WATER && (season === 'winter' ? t !== T.TLEAF : y >= SNOW_LINE[season] && (t === T.STONE || t === T.GRASS || t === T.DIRT));
   if (snowy && !(t === T.MUD)) { out.copy(FIXED.snow); return out; }
   switch (t) {
-    case T.GRASS: out.copy(dir === 2 ? p.grass : tmpSide.copy(FIXED.dirt).lerp(season === 'winter' ? FIXED.snow : p.grass, season === 'winter' ? 0.45 : 0.6)); break;
+    // 侧面直接用草色压暗一点。原来掺土色，方块减半后每一级台阶都会变成一条褐色横纹
+    case T.GRASS: out.copy(season === 'winter' ? FIXED.snow : p.grass); if (dir !== 2) out.multiplyScalar(season === 'winter' ? 0.95 : 0.9); break;
     case T.DIRT: out.copy(FIXED.dirt); break;
     case T.STONE: out.copy(FIXED.stone); break;
     case T.SAND: out.copy(FIXED.sand); break;
@@ -384,7 +429,8 @@ function faceColor(t, dir, y, v, season, out) {
     case T.TLEAF: out.copy(p.tleaf); if (season === 'autumn' && v > 0.55) out.lerp(FIXED.autumnYellow, 0.55); break;
     default: out.setRGB(1, 0, 1);
   }
-  const k = 0.9 + v * 0.14;
+  // 方块越小，逐块明暗差越要收敛，否则整片地形会变成噪点
+  const k = 0.94 + v * 0.08;
   out.r *= k; out.g *= k; out.b *= k;
   return out;
 }
@@ -398,9 +444,12 @@ const DIRS = [
   { n: [0, 0, 1], c: [[-0.5, -0.5, 0.5], [0.5, -0.5, 0.5], [0.5, 0.5, 0.5], [-0.5, 0.5, 0.5]] },
   { n: [0, 0, -1], c: [[0.5, -0.5, -0.5], [-0.5, -0.5, -0.5], [-0.5, 0.5, -0.5], [0.5, 0.5, -0.5]] },
 ];
-const FACE_SHADE = [0.84, 0.84, 1.0, 0.55, 0.74, 0.74];
-const AO_CURVE = [0.52, 0.7, 0.86, 1.0];
+const FACE_SHADE = [0.9, 0.9, 1.0, 0.72, 0.84, 0.84];
+const AO_CURVE = [0.74, 0.86, 0.94, 1.0];
 const UVS = [[0, 0], [1, 0], [1, 1], [0, 1]];
+// 每个方向上，与法线垂直的两个轴（0=x 1=y 2=z）。预先算好，避免逐面分配数组。
+const AXIS_A = [1, 1, 0, 0, 0, 0];
+const AXIS_B = [2, 2, 2, 2, 1, 1];
 const WATER_DROP = 0.22;
 
 /**
@@ -428,18 +477,17 @@ export function buildMesh(grid, filter, origin = [0, 0, 0]) {
           const tile = tileFor(t, f);
           const u0 = (tile * TILE + 0.02) / (TILE * TILES), u1 = (tile * TILE + TILE - 0.02) / (TILE * TILES);
           const ao = [0, 0, 0, 0];
+          const a0 = AXIS_A[f], a1 = AXIS_B[f];
           for (let k = 0; k < 4; k++) {
             const c = dir.c[k];
-            const off = [Math.sign(c[0]), Math.sign(c[1]), Math.sign(c[2])];
-            const axes = [0, 1, 2].filter((a) => dir.n[a] === 0);
-            const s1 = [nx, ny, nz], s2 = [nx, ny, nz];
-            s1[axes[0]] += off[axes[0]];
-            s2[axes[1]] += off[axes[1]];
-            const cr = [nx, ny, nz];
-            cr[axes[0]] += off[axes[0]]; cr[axes[1]] += off[axes[1]];
-            const a = occludes(t, grid.get(s1[0], s1[1], s1[2])) ? 1 : 0;
-            const b = occludes(t, grid.get(s2[0], s2[1], s2[2])) ? 1 : 0;
-            const cc = occludes(t, grid.get(cr[0], cr[1], cr[2])) ? 1 : 0;
+            const o0 = c[a0] > 0 ? 1 : -1;
+            const o1 = c[a1] > 0 ? 1 : -1;
+            const s1x = nx + (a0 === 0 ? o0 : 0), s1y = ny + (a0 === 1 ? o0 : 0), s1z = nz + (a0 === 2 ? o0 : 0);
+            const s2x = nx + (a1 === 0 ? o1 : 0), s2y = ny + (a1 === 1 ? o1 : 0), s2z = nz + (a1 === 2 ? o1 : 0);
+            const crx = s1x + (a1 === 0 ? o1 : 0), cry = s1y + (a1 === 1 ? o1 : 0), crz = s1z + (a1 === 2 ? o1 : 0);
+            const a = occludes(t, grid.get(s1x, s1y, s1z)) ? 1 : 0;
+            const b = occludes(t, grid.get(s2x, s2y, s2z)) ? 1 : 0;
+            const cc = occludes(t, grid.get(crx, cry, crz)) ? 1 : 0;
             ao[k] = t === T.WATER ? 3 : (a && b ? 0 : 3 - (a + b + cc));
           }
           for (let k = 0; k < 4; k++) {
