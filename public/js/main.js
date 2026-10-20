@@ -948,16 +948,35 @@ let doorTarget = 0;
 const hut = initHut({ onClose: () => { doorTarget = 0; } });
 $('#card-close').addEventListener('click', () => card.close());
 
-// 手机上控制面板默认收起
+// ---------- 两个菜单都能收起：选择记在本标签页里，画面随取随让 ----------
+const store = {
+  get: (k) => { try { return sessionStorage.getItem(`natume.ui.${k}`); } catch { return null; } },
+  set: (k, v) => { try { sessionStorage.setItem(`natume.ui.${k}`, v); } catch { /* 隐私模式下忽略 */ } },
+};
 const panel = $('#panel'), panelToggle = $('#panel-toggle'), summaryEl = $('#panel-summary');
+const cardCollapse = $('#identity-collapse'), cardOpen = $('#identity-open');
 const small = matchMedia('(max-width: 640px)');
-function setPanel(open) {
+
+function setPanel(open, remember = true) {
   panel.classList.toggle('collapsed', !open);
   panelToggle.setAttribute('aria-expanded', String(open));
+  document.body.classList.toggle('panel-open', open);
+  if (remember) store.set('panel', open ? '1' : '0');
 }
-setPanel(!small.matches);
-small.addEventListener('change', (e) => setPanel(!e.matches));
+function setCard(open, remember = true) {
+  document.body.classList.toggle('identity-hidden', !open);
+  cardCollapse.setAttribute('aria-expanded', String(open));
+  cardOpen.setAttribute('aria-expanded', String(open));
+  if (remember) store.set('card', open ? '1' : '0');
+}
+// 桌面默认展开面板、手机默认收起；名片默认展开。自己选过就听自己的
+const savedPanel = store.get('panel'), savedCard = store.get('card');
+setPanel(savedPanel === null ? !small.matches : savedPanel === '1', false);
+setCard(savedCard === null ? true : savedCard === '1', false);
+small.addEventListener('change', (e) => { if (store.get('panel') === null) setPanel(!e.matches, false); });
 panelToggle.addEventListener('click', () => { setPanel(panel.classList.contains('collapsed')); hideHint(); });
+cardCollapse.addEventListener('click', () => { setCard(false); cardOpen.focus({ preventScroll: true }); hideHint(); });
+cardOpen.addEventListener('click', () => { setCard(true); cardCollapse.focus({ preventScroll: true }); hideHint(); });
 const SEASON_CN = { spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
 const summary = () => `${SEASON_CN[state.season]} · ${state.rain ? (state.season === 'winter' ? '雪' : '雨') : '晴'} · ${fmt(state.hour)}`;
 

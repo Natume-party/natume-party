@@ -73,7 +73,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 #panel {
   left: 50%; transform: translateX(-50%);
-  bottom: calc(var(--gap) + env(safe-area-inset-bottom));
+  bottom: calc(var(--gap) + env(safe-area-inset-bottom) + 48px);
   display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: center;
   padding: 8px; border-radius: 18px; background: var(--glass); border: 1px solid var(--line);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
@@ -167,7 +167,18 @@ dialog[open] { animation: pop .28s ease; }
 .primary:active { transform: translateY(1px); }
 
 
-#panel-toggle { display: none; }
+/* 两个菜单都可收起：收起后各留一枚小把手，画面整体让出来 */
+#panel-toggle {
+  display: inline-flex; left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--gap) + env(safe-area-inset-bottom));
+  gap: 6px; font-variant-numeric: tabular-nums;
+}
+#panel-toggle svg { width: 16px; height: 16px; flex: none; transition: transform .2s ease; }
+#panel-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+#panel-toggle:hover { background: var(--glass-strong); }
+#panel.collapsed { display: none; }
+/* 面板展开时把提示条抬到它上面，避免压在一起 */
+body.panel-open #hint { bottom: calc(var(--gap) + env(safe-area-inset-bottom) + 132px); }
 .noscript { position: fixed; inset: 0; display: grid; place-items: center; margin: 0; color: var(--fg); }
 body.no-ui .hud, body.no-ui #hint, body.no-ui #toast, body.no-ui #panel-toggle { display: none !important; }
 
@@ -184,14 +195,8 @@ body.no-ui .hud, body.no-ui #hint, body.no-ui #toast, body.no-ui #panel-toggle {
   .time input { flex: 1; width: auto; min-width: 0; }
   .time button { flex: 0 0 auto; }
   .label { width: 30px; flex: 0 0 auto; }
-  #panel-toggle {
-    display: inline-flex; left: 50%; transform: translateX(-50%);
-    bottom: calc(var(--gap) + env(safe-area-inset-bottom)); gap: 6px; font-variant-numeric: tabular-nums;
-  }
-  #panel-toggle svg { width: 16px; height: 16px; transition: transform .2s; }
-  #panel-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
-  #panel { bottom: calc(var(--gap) + env(safe-area-inset-bottom) + 46px); }
-  #panel.collapsed { display: none; }
+  /* 手机上一屏只留一条底栏：面板展开时名片先退场，收起来再回来 */
+  body.panel-open .identity-card { opacity: 0; visibility: hidden; pointer-events: none; }
   #hint { bottom: calc(var(--gap) + env(safe-area-inset-bottom) + 52px); font-size: 12px; }
   .tabs button { height: 44px; letter-spacing: .02em; }
   .card-body { padding: 18px 16px 14px; max-height: calc(100dvh - var(--gap) * 2 - 12px); }
@@ -219,8 +224,9 @@ body.no-ui .hud, body.no-ui #hint, body.no-ui #toast, body.no-ui #panel-toggle {
   transition: opacity .22s ease, visibility .22s ease;
 }
 /* 小屋弹窗打开时收起名片：1280/1366 上它原本会从纸片后面探出来 */
-body.has-dialog .identity-card { opacity: 0; visibility: hidden; pointer-events: none; }
-.identity-eyebrow { display: flex; align-items: center; gap: 9px; margin: 0 0 15px; color: #ffe3a4; font-size: 10px; font-weight: 700; letter-spacing: .19em; }
+body.has-dialog .identity-card,
+body.has-dialog .identity-open { opacity: 0; visibility: hidden; pointer-events: none; }
+.identity-eyebrow { display: flex; align-items: center; gap: 9px; margin: 0 0 15px; padding-right: 34px; color: #ffe3a4; font-size: 10px; font-weight: 700; letter-spacing: .19em; }
 .identity-spark { display: inline-block; width: 7px; height: 7px; border-radius: 2px; transform: rotate(45deg); background: #ffd36b; box-shadow: 0 0 10px rgba(255, 211, 107, .55); }
 .identity-title { margin: 0; color: #fffdf5; font-size: clamp(24px, 2.15vw, 32px); line-height: 1.3; font-weight: 700; letter-spacing: -.025em; }
 .identity-title span { display: block; color: #ffd36b; font-size: clamp(34px, 3.5vw, 52px); line-height: 1.15; letter-spacing: -.035em; }
@@ -239,6 +245,35 @@ body.has-dialog .identity-card { opacity: 0; visibility: hidden; pointer-events:
 .identity-link:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
 .identity-tip { margin: 18px 0 0; color: rgba(255, 250, 234, .68); font-size: 11px; line-height: 1.6; }
 
+/* 名片右上角的收起钮：小而安静，不跟内容抢注意力 */
+.card-collapse {
+  position: absolute; top: 9px; right: 9px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0;
+  border: 1px solid rgba(255, 246, 219, .2); border-radius: 9px;
+  background: rgba(255, 255, 255, .06); color: rgba(255, 250, 234, .7);
+  transition: background .16s, color .16s, border-color .16s;
+}
+.card-collapse svg { width: 16px; height: 16px; }
+.card-collapse:hover { background: rgba(255, 255, 255, .16); color: #fffaf0; border-color: rgba(255, 246, 219, .44); }
+.card-collapse:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* 收起后名片缩成左上角「名片」小把手，跟标题同一列，不压住画面 */
+.identity-open {
+  display: none; align-items: center;
+  left: calc(var(--gap) + env(safe-area-inset-left));
+  top: calc(var(--gap) + env(safe-area-inset-top) + 60px);
+  height: 32px; padding: 0 10px 0 9px; gap: 6px;
+  font-size: 12px; font-weight: 650; letter-spacing: .04em;
+  transition: background .16s, border-color .16s;
+}
+.identity-open .card-glyph { width: 15px; height: 15px; opacity: .85; }
+.identity-open .card-chevron { width: 13px; height: 13px; opacity: .7; }
+.identity-open:hover { background: var(--glass-strong); border-color: rgba(255, 246, 219, .4); }
+.identity-open:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+body.identity-hidden .identity-card { opacity: 0; visibility: hidden; pointer-events: none; }
+body.identity-hidden .identity-open { display: inline-flex; }
+
 @media (min-width: 641px) and (max-width: 1100px) {
   .identity-card { width: 340px; max-width: 43vw; left: 24px; padding: 21px; }
 }
@@ -255,6 +290,8 @@ body.has-dialog .identity-card { opacity: 0; visibility: hidden; pointer-events:
   .identity-links { gap: 6px; }
   .identity-link { flex: 1; min-height: 36px; padding: 6px 7px; font-size: 12px; gap: 4px; white-space: nowrap; }
   .identity-tip { margin-top: 9px; font-size: 10px; }
+  .card-collapse { top: 7px; right: 7px; width: 32px; height: 32px; }
+  .identity-open { top: calc(var(--gap) + env(safe-area-inset-top) + 52px); height: 30px; font-size: 11px; }
   #hint { display: none; }
 }
 @media (max-width: 640px) and (max-height: 620px) {
