@@ -111,18 +111,23 @@ const tileTexture = (tile) => {
 const blockMat = new THREE.MeshLambertMaterial({ map: atlas, vertexColors: true });
 
 const W = generateWorld();
-const world = buildMesh(W.grid, filters.world, [0,0,0], true);
+// Isolated preview A/B switch for measured LOD-vs-original comparisons.
+// ?lod=off reconstructs the original terrain geometry without touching W.grid.
+const useDistantLOD = params.get('lod') !== 'off';
+const world = buildMesh(W.grid, filters.world, [0,0,0], useDistantLOD);
 const worldMesh = new THREE.Mesh(world.geometry, blockMat);
 worldMesh.castShadow = worldMesh.receiveShadow = true;
 // 网格按细分倍数缩小回世界尺度：方块更细，世界范围不变
 worldMesh.scale.setScalar(1 / V);
 scene.add(worldMesh);
-const distantSlope = buildDistantSlopeLOD(W);
-const distantSlopeMesh = new THREE.Mesh(distantSlope.geometry,
-  new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide}));
-distantSlopeMesh.receiveShadow = true;
-distantSlopeMesh.castShadow = false;
-scene.add(distantSlopeMesh);
+const distantSlope = useDistantLOD ? buildDistantSlopeLOD(W) : null;
+if (distantSlope) {
+  const distantSlopeMesh = new THREE.Mesh(distantSlope.geometry,
+    new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+  distantSlopeMesh.receiveShadow = true;
+  distantSlopeMesh.castShadow = false;
+  scene.add(distantSlopeMesh);
+}
 
 // 水面：单独的半透明材质，纹理滚动表现水流
 const waterTex = (() => {
@@ -866,7 +871,7 @@ const WATER_COL = { spring: '#4a8f86', summer: '#3f8279', autumn: '#437a78', win
 function applySeason() {
   const s = state.season;
   world.recolor(s);
-  distantSlope.recolor(s);
+  if (distantSlope) distantSlope.recolor(s);
   trunk.recolor(s);
   leaves.recolor(s);
   leavesMesh.visible = s !== 'winter';
@@ -1508,7 +1513,7 @@ if (hut.initial) {
 // 方便调试：在控制台查看
 window.__natume = {
   state, scene, camera, controls, faces: world.faces,
-  lodFaces: distantSlope.faces,
+  lodFaces: distantSlope?.faces ?? 0, lodEnabled: useDistantLOD,
   project(x, y, z) {
     const v = new THREE.Vector3(x, y, z).project(camera);
     return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight];
