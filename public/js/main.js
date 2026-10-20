@@ -239,21 +239,29 @@ const porchLight = new THREE.PointLight(0xffc46b, 0, 22, 1.6);
 porchLight.position.set(W.door.x - 0.5, 2.6, W.door.z + 2);
 scene.add(porchLight);
 
-// ---------- 小桥：拱桥，桥下要给纸船留出净空 ----------
+// ---------- 小桥 V3.1：紧凑木拱桥，连续扶手与两侧承重梁 ----------
+// 所有部件沿 deckY 的切线倾斜，避免弧形桥被画成一排松散水平短棍。
+// 仅在桥侧增加梁，中央桥下仍给纸船的桅杆留出净空。
 {
   const b = W.bridge;
-  const mat = new THREE.MeshLambertMaterial({ map: plankTex, color: 0xc0915a });
+  const mat = new THREE.MeshLambertMaterial({ map: plankTex, color: 0xb98c5c });
   const cols = Math.round(b.x1 - b.x0), rows = Math.round(b.z1 - b.z0);
-  // 拱高按纸船定：桅顶在 1.0 上下，桥面下沿最薄处也要高过它
   const rowsAll = rows + 2;
   const zc = (b.z0 + b.z1) / 2;
   const zAt = (j) => zc + (j - (rowsAll - 1) / 2);
   const deckY = (j) => 0.3 + 1.12 * Math.sin(Math.PI * (j / (rowsAll - 1)));
-  const planks = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.26, 0.92), mat, cols * rowsAll);
+  const slopeAt = (j) => {
+    const before = Math.max(0, j - 1), after = Math.min(rowsAll - 1, j + 1);
+    return Math.atan2(deckY(after) - deckY(before), zAt(after) - zAt(before));
+  };
+  // 原板深 0.92、中心间距 1，会露出明显纵向缝隙；改为小幅交叠的贴合板。
+  // 木板随拱线调整坡度，仍留横向细纹而不是做成整块塑料平台。
+  const planks = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(0.985, 0.24, 1.035), mat, cols * rowsAll);
   let n = 0;
   for (let i = 0; i < cols; i++) for (let j = 0; j < rowsAll; j++) {
     dummy.position.set(b.x0 + 0.5 + i, deckY(j), zAt(j));
-    dummy.rotation.set(0, 0, 0);
+    dummy.rotation.set(-slopeAt(j), 0, 0);
     dummy.scale.set(1, 1, 1);
     dummy.updateMatrix();
     planks.setMatrixAt(n++, dummy.matrix);
@@ -261,36 +269,57 @@ scene.add(porchLight);
   planks.castShadow = planks.receiveShadow = true;
   scene.add(planks);
 
-  const postMat = new THREE.MeshLambertMaterial({ map: tileTexture(TILE_ID.LOG), color: 0x6b4a2e });
-  const RAIL_H = 0.78;
-  const rails = new THREE.InstancedMesh(new THREE.BoxGeometry(0.12, 0.13, 1.02), postMat, 2 * rowsAll);
-  const balusters = [];
-  let rn = 0;
-  for (const x of [b.x0 - 0.03, b.x1 + 0.03]) {
-    for (let j = 0; j < rowsAll; j++) {
-      const y = deckY(j), z = zAt(j);
-      dummy.position.set(x, y + RAIL_H, z);
-      dummy.rotation.set(0, 0, 0);
-      dummy.scale.set(1, 1, 1);
+  const woodMat = new THREE.MeshLambertMaterial({
+    map: tileTexture(TILE_ID.LOG), color: 0x775337,
+  });
+  const RAIL_H = 0.82;
+  const spans = rowsAll - 1;
+  // 一根梁沿多段拱线首尾重叠，视觉上是一条完整的木结构。
+  const sideBeams = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(0.19, 0.23, 1), woodMat, 2 * spans);
+  const handrails = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(0.14, 0.14, 1), woodMat, 2 * spans);
+  let railIndex = 0;
+  const posts = [];
+  for (let side = 0; side < 2; side++) {
+    const xRail = side === 0 ? b.x0 - 0.055 : b.x1 + 0.055;
+    const xBeam = side === 0 ? b.x0 + 0.075 : b.x1 - 0.075;
+    for (let j = 0; j < spans; j++) {
+      const y0 = deckY(j), y1 = deckY(j + 1);
+      const z0 = zAt(j), z1 = zAt(j + 1);
+      const slope = Math.atan2(y1 - y0, z1 - z0);
+      const len = Math.hypot(y1 - y0, z1 - z0);
+      dummy.rotation.set(-slope, 0, 0);
+      dummy.scale.set(1, 1, len * 1.045);
+      dummy.position.set(xRail, (y0 + y1) / 2 + RAIL_H, (z0 + z1) / 2);
       dummy.updateMatrix();
-      rails.setMatrixAt(rn++, dummy.matrix);
-      if (j % 3 === 0) balusters.push([x, y, z]);
+      handrails.setMatrixAt(railIndex, dummy.matrix);
+      dummy.position.set(xBeam, (y0 + y1) / 2 - 0.17, (z0 + z1) / 2);
+      dummy.updateMatrix();
+      sideBeams.setMatrixAt(railIndex, dummy.matrix);
+      railIndex++;
+    }
+    // 两侧每两格一根立柱，并确保桥首尾都有支点。
+    for (let j = 0; j < rowsAll; j++) {
+      if (j % 2 === 0 || j === rowsAll - 1) posts.push([xRail, deckY(j), zAt(j)]);
     }
   }
-  rails.castShadow = true;
-  scene.add(rails);
+  sideBeams.castShadow = handrails.castShadow = true;
+  scene.add(sideBeams, handrails);
 
-  const balMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.16, 1, 0.16), postMat, balusters.length);
-  balusters.forEach(([x, y, z], i) => {
-    const top = y + RAIL_H + 0.1, bot = -0.1;
-    dummy.position.set(x, (top + bot) / 2, z);
+  // 立柱下端只入桥板，旧实现从每根立柱延伸到固定水位，像河里散乱的木桩。
+  const balusters = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(0.15, 1, 0.15), woodMat, posts.length);
+  posts.forEach(([x, y, z], i) => {
+    const bottom = y - 0.12, top = y + RAIL_H + 0.09;
+    dummy.position.set(x, (bottom + top) / 2, z);
     dummy.rotation.set(0, 0, 0);
-    dummy.scale.set(1, top - bot, 1);
+    dummy.scale.set(1, top - bottom, 1);
     dummy.updateMatrix();
-    balMesh.setMatrixAt(i, dummy.matrix);
+    balusters.setMatrixAt(i, dummy.matrix);
   });
-  balMesh.castShadow = true;
-  scene.add(balMesh);
+  balusters.castShadow = true;
+  scene.add(balusters);
 }
 
 
