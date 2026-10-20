@@ -577,7 +577,10 @@ export function generateWorld() {
   // 窗洞：前墙两扇、两侧各一扇，1 个单位见方
   // 窗洞宽度取奇数体素格，保证两窗与房屋中心的镜像轴严格吻合。
   const windowCells = V % 2 === 0 ? V + 1 : V;
-  const frontLeft0 = Math.round(-10.6 * V - (windowCells - 1) / 2);
+  // V=2 的三格窗若沿用旧坐标，会与门框两侧立柱各撞上一列体素。
+  // 将左窗限制在外墙角柱与门框外侧之间，右窗沿房屋中轴镜像生成。
+  const frontLeftNominal = Math.round(-10.6 * V - (windowCells - 1) / 2);
+  const frontLeft0 = Math.max(hx0 + 1, Math.min(frontLeftNominal, doorX0 - windowCells - 1));
   const frontRight0 = hx0 + hx1 - (frontLeft0 + windowCells - 1);
   const side0 = Math.round((hz0 + hz1 - windowCells + 1) / 2);
   const winDefs = [
@@ -844,6 +847,16 @@ export function generateWorld() {
   // 对外：世界坐标进，世界高度出
   const heightAtWorld = (xw, zw) => heightAtBlock(Math.round(xw * V), Math.round(zw * V)) / V;
 
+  // 在所有墙、构架、山墙生成之后验证窗洞，捕获中心线检查无法发现的占格重叠。
+  const windowObstructions = winDefs.map((w) => {
+    let blocked = 0;
+    for (let a = w.a0; a <= w.a1; a++) for (let y = w.y0; y <= w.y1; y++) {
+      const t = w.axis === 'z' ? grid.get(a, y, w.wall) : grid.get(w.wall, y, a);
+      if (t !== T.AIR) blocked++;
+    }
+    return blocked;
+  });
+
   return {
     grid, getH: heightAtWorld, topAt, windows, chimney, fruitSpots, flowerSpots, groundFlowers, reeds, bridge,
     tufts, lilies, hillShrubs, hillStones,
@@ -854,6 +867,9 @@ export function generateWorld() {
       doorCenterError: Math.abs((doorX0 + doorX1) / 2 / V - HUT.doorX),
       frontWindowMirrorError: Math.abs((windows[0].x + windows[1].x) / 2 - HUT.doorX),
       sideWindowAlignError: Math.abs(windows[2].z - windows[3].z),
+      windowObstructions,
+      totalWindowObstructions: windowObstructions.reduce((sum, n) => sum + n, 0),
+      treeCanopyTop: Math.max(...leafCells.map((cell) => cell.y)) / V,
     },
   };
 }
