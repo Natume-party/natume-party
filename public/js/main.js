@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from '../vendor/OrbitControls.js';
 import {
-  generateWorld, buildMesh, filters, makeAtlas, TILE_ID, TREE, fbm, smoothstep, hash3, riverZ,
+  generateWorld, buildMesh, filters, makeAtlas, TILE_ID, TREE, fbm, smoothstep, hash3, riverZ, V,
 } from './world.js';
 import { Ambience } from './audio.js';
 import { initHut } from './hut.js';
@@ -33,11 +33,14 @@ try {
 renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.75 : 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// 电影感色调映射：高光不再直接削平；Neutral 比 ACES 更能守住这种插画色的饱和度
+renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.toneMappingExposure = 1.08;
 $('#app').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xbfe0f5, 70, 230);
+scene.fog = new THREE.Fog(0xbfe0f5, 62, 210);
 
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.3, 1200);
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -84,8 +87,8 @@ const sun = new THREE.DirectionalLight(0xffffff, 2.5);
 sun.castShadow = true;
 sun.shadow.mapSize.set(isTouch ? 1024 : 2048, isTouch ? 1024 : 2048);
 Object.assign(sun.shadow.camera, { left: -46, right: 46, top: 46, bottom: -46, near: 1, far: 320 });
-sun.shadow.bias = -0.0006;
-sun.shadow.normalBias = 0.04;
+sun.shadow.bias = -0.0008;
+sun.shadow.normalBias = 0.05;
 scene.add(sun, sun.target);
 const SHADOW_CENTER = new THREE.Vector3(-1, 0, -2);
 sun.target.position.copy(SHADOW_CENTER);
@@ -107,6 +110,8 @@ const W = generateWorld();
 const world = buildMesh(W.grid, filters.world);
 const worldMesh = new THREE.Mesh(world.geometry, blockMat);
 worldMesh.castShadow = worldMesh.receiveShadow = true;
+// 网格按细分倍数缩小回世界尺度：方块更细，世界范围不变
+worldMesh.scale.setScalar(1 / V);
 scene.add(worldMesh);
 
 // 水面：单独的半透明材质，纹理滚动表现水流
@@ -128,35 +133,41 @@ const waterTex = (() => {
 const water = buildMesh(W.grid, filters.water);
 {
   const uv = water.geometry.attributes.uv.array;
-  for (let i = 0; i < uv.length; i += 2) uv[i] *= 16;
+  // 每个小块 8 次重复，和原来每个整块 16 次的水纹密度一致
+  for (let i = 0; i < uv.length; i += 2) uv[i] *= 16 / V;
 }
-const waterMat = new THREE.MeshLambertMaterial({ map: waterTex, color: 0x3d93cf, transparent: true, opacity: 0.82 });
+const waterMat = new THREE.MeshPhongMaterial({ map: waterTex, color: 0x3d93cf, transparent: true, opacity: 0.82, shininess: 70, specular: 0x9fd0ff });
 const waterMesh = new THREE.Mesh(water.geometry, waterMat);
 waterMesh.receiveShadow = true;
 waterMesh.renderOrder = 1;
+waterMesh.scale.setScalar(1 / V);
 scene.add(waterMesh);
 
 // ---------- 枣树（可摇） ----------
 const pivot = [TREE.x, 0.5, TREE.z];
+const pivotBlock = [TREE.x * V, 0.5 * V, TREE.z * V];
 const treeGroup = new THREE.Group();
 treeGroup.position.set(...pivot);
+treeGroup.scale.setScalar(1 / V);
 scene.add(treeGroup);
-const trunk = buildMesh(W.grid, filters.trunk, pivot);
-const leaves = buildMesh(W.grid, filters.leaves, pivot);
+const trunk = buildMesh(W.grid, filters.trunk, pivotBlock);
+const leaves = buildMesh(W.grid, filters.leaves, pivotBlock);
 const trunkMesh = new THREE.Mesh(trunk.geometry, blockMat);
 const leavesMesh = new THREE.Mesh(leaves.geometry, blockMat);
 for (const m of [trunkMesh, leavesMesh]) { m.castShadow = m.receiveShadow = true; treeGroup.add(m); }
 
 const dummy = new THREE.Object3D();
-const fruitGeo = new THREE.BoxGeometry(0.34, 0.42, 0.34);
+const fruitGeo = new THREE.BoxGeometry(0.34 * V, 0.42 * V, 0.34 * V);
 const fruitMat = new THREE.MeshLambertMaterial();
 const fruitMesh = new THREE.InstancedMesh(fruitGeo, fruitMat, W.fruitSpots.length);
 fruitMesh.castShadow = true;
 treeGroup.add(fruitMesh);
 const fruitAlive = W.fruitSpots.map(() => true);
+// 树组整体缩了 1/V，组内坐标要用小方块单位
+const inTree = (s) => [(s.x - pivot[0]) * V, (s.y - pivot[1]) * V, (s.z - pivot[2]) * V];
 function setFruit(i, on) {
   const s = W.fruitSpots[i];
-  dummy.position.set(s.x - pivot[0], s.y - pivot[1], s.z - pivot[2]);
+  dummy.position.set(...inTree(s));
   dummy.rotation.set(0, s.v * 3, 0);
   dummy.scale.setScalar(on ? 1 : 0.0001);
   dummy.updateMatrix();
@@ -166,9 +177,10 @@ function setFruit(i, on) {
 }
 W.fruitSpots.forEach((_, i) => setFruit(i, true));
 
-const blossomMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.22, 0.22, 0.22), new THREE.MeshLambertMaterial(), W.flowerSpots.length);
+const blossomMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.22 * V, 0.22 * V, 0.22 * V), new THREE.MeshLambertMaterial(), W.flowerSpots.length);
 W.flowerSpots.forEach((s, i) => {
-  dummy.position.set(s.x - pivot[0], s.y - pivot[1] + 0.15, s.z - pivot[2]);
+  const p = inTree(s);
+  dummy.position.set(p[0], p[1] + 0.15 * V, p[2]);
   dummy.rotation.set(s.v, s.v * 2, 0);
   dummy.scale.setScalar(1);
   dummy.updateMatrix();
@@ -201,7 +213,7 @@ for (const w of W.windows) {
 
 const plankTex = tileTexture(TILE_ID.PLANK);
 const doorPivot = new THREE.Group();
-doorPivot.position.set(W.door.x - 0.5, 1.5, W.door.z + 0.38);
+doorPivot.position.set(W.door.x - 0.5, 1.5 - 0.5 / V, W.door.z + 0.38);
 const door = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 0.16), new THREE.MeshLambertMaterial({ map: plankTex, color: 0x9a6a40 }));
 door.position.x = 0.5;
 door.castShadow = true;
@@ -259,7 +271,7 @@ scene.add(porchLight);
 
 
 // ---------- 门外的小物件：信箱、路牌、纸船 ----------
-const groundY = (x, z) => Math.max(0, W.getH(Math.round(x), Math.round(z))) + 0.5;
+const groundY = (x, z) => Math.max(0, W.getH(Math.round(x), Math.round(z))) + 0.5 / V;
 const lamb = (color, map = null) => new THREE.MeshLambertMaterial({ color, map });
 function block(w, h, d, mat, x, y, z, parent) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
@@ -365,6 +377,22 @@ W.reeds.forEach((r, i) => {
 reedMesh.castShadow = true;
 scene.add(reedMesh, cattailMesh);
 
+// ---------- 萤火：夜里的草坡上慢慢飘 ----------
+const FIRE_N = 44;
+const fireMat = new THREE.MeshBasicMaterial({ color: 0xffe6a0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+const fireMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.085, 0.085, 0.085), fireMat, FIRE_N);
+fireMesh.frustumCulled = false;
+scene.add(fireMesh);
+const fireSeeds = Array.from({ length: FIRE_N }, () => ({
+  ax: (Math.random() * 2 - 1) * 9 + 1,
+  az: (Math.random() * 2 - 1) * 7 - 1,
+  y: 0.7 + Math.random() * 2.4,
+  sp: 0.25 + Math.random() * 0.5,
+  ph: Math.random() * Math.PI * 2,
+  rr: 0.6 + Math.random() * 1.6,
+}));
+let fireT = 0;
+
 // ---------- 炊烟 ----------
 const smoke = [];
 for (let i = 0; i < 8; i++) {
@@ -382,7 +410,7 @@ const skyDome = new THREE.Mesh(
   new THREE.ShaderMaterial({
     uniforms: skyUniforms,
     vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: 'uniform vec3 top; uniform vec3 bottom; varying vec3 vP;\nvoid main() {\n  float h = clamp(vP.y * 1.8 + 0.12, 0.0, 1.0);\n  gl_FragColor = vec4(mix(bottom, top, pow(h, 0.75)), 1.0);\n  #include <colorspace_fragment>\n}',
+    fragmentShader: 'uniform vec3 top; uniform vec3 bottom; varying vec3 vP;\nvoid main() {\n  float h = clamp(vP.y * 1.8 + 0.12, 0.0, 1.0);\n  gl_FragColor = vec4(mix(bottom, top, pow(h, 0.75)), 1.0);\n  #include <tonemapping_fragment>\n  #include <colorspace_fragment>\n}',
     side: THREE.BackSide, depthWrite: false, fog: false,
   }),
 );
@@ -622,9 +650,11 @@ function updateSky(hour) {
   sun.color.copy(isSun ? cTmp.copy(COL.sunWarm).lerp(COL.sunWhite, smoothstep(0.02, 0.4, sy)) : COL.moon);
   sun.position.copy(SHADOW_CENTER).addScaledVector(lightDir, 160);
   hemi.color.copy(top);
-  hemi.groundColor.set(0x6b5a44);
+  // 地面反弹光偏草色，方块减半后竖直面太多，原来的土褐色会把整片山坡刷成横纹
+  hemi.groundColor.set(0x7d8462);
   hemi.intensity = (0.4 + 0.8 * day) * (state.rain ? 0.8 : 1);
-  ambient.intensity = 0.5 * (1 - day) + 0.45 * dusk;
+  // 阴影里留一点底光，不然墙面在低角度太阳下会糊成一片黑
+  ambient.intensity = 0.14 + 0.5 * (1 - day) + 0.45 * dusk;
 
   const R_SKY = 450;
   sunMesh.position.copy(sunDir).multiplyScalar(R_SKY);
@@ -641,6 +671,10 @@ function updateSky(hour) {
   porchLight.intensity = nightness * 26;
 
   cloudMat.color.copy(COL.cloudNight).lerp(COL.cloudDay, day).lerp(COL.cloudDusk, dusk * 0.5);
+  // 夜里把草地上的小花一起压暗，否则会变成一片发光的彩色噪点
+  const flowerDim = 0.28 + 0.72 * day;
+  stemMesh.material.color.setScalar(flowerDim);
+  petalMesh.material.color.setScalar(flowerDim);
   if (state.rain) cloudMat.color.lerp(cTmp.copy(COL.cloudNight).lerp(COL.cloudRain, day), 0.8);
   rainMat.color.copy(COL.rainLineNight).lerp(COL.rainLineDay, day);
   snowMat.color.setScalar(0.45 + 0.55 * day);
@@ -767,8 +801,8 @@ function onTap(cx, cy) {
   } else if (p.kind === 'mail') {
     audio.knock();
     mailWiggle = 1;
-    toast('信箱里放着联系方式');
-    setTimeout(() => hut.open('about'), 300);
+    toast('把想说的话投进信箱吧');
+    setTimeout(() => hut.open('guestbook'), 300);
   } else if (p.kind === 'sign') {
     audio.knock();
     hut.open('works');
@@ -1051,6 +1085,28 @@ function frame() {
       const dead = fruitAlive.map((a, i) => (a ? -1 : i)).filter((i) => i >= 0);
       if (dead.length) setFruit(dead[Math.floor(Math.random() * dead.length)], true);
     }
+  }
+
+  // 萤火虫：入夜后出现，白天与下雨时隐藏
+  fireT += dt;
+  const fireOn = nightness > 0.22 && !state.rain;
+  fireMesh.visible = fireOn;
+  if (fireOn) {
+    fireMat.opacity = 0.55 * smoothstep(0.22, 0.75, nightness);
+    for (let i = 0; i < FIRE_N; i++) {
+      const s = fireSeeds[i];
+      const t = fireT * s.sp + s.ph;
+      dummy.position.set(
+        s.ax + Math.cos(t) * s.rr,
+        s.y + Math.sin(t * 1.7) * 0.35,
+        s.az + Math.sin(t * 0.8) * s.rr,
+      );
+      dummy.rotation.set(t * 0.4, t * 0.6, 0);
+      dummy.scale.setScalar(0.55 + 0.45 * Math.max(0, Math.sin(t * 2.2)));
+      dummy.updateMatrix();
+      fireMesh.setMatrixAt(i, dummy.matrix);
+    }
+    fireMesh.instanceMatrix.needsUpdate = true;
   }
 
   controls.update();

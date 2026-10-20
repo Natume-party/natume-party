@@ -2,7 +2,28 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "natume-party",
   "compatibility_date": "2026-10-01",
+  "main": "./worker/index.js",
   "assets": {
-    "directory": "./public"
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/api/*"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "GUESTBOOK_DB",
+      "database_name": "natume-guestbook-prod",
+      "database_id": "ae07ac2b-8d57-44b4-95ff-f46528503ca5"
+    }
+  ],
+  "previews": {
+    "d1_databases": [
+      {
+        "binding": "GUESTBOOK_DB",
+        "database_name": "natume-guestbook-preview",
+        "database_id": "70ac212a-c4b5-4b78-a204-3029b21b3230"
+      }
+    ]
   }
 }

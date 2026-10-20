@@ -1,12 +1,18 @@
-# 作品
+# 我的作品
 
-## natume.party
+这里收藏一些我愿意公开的小作品。先从眼前这个小世界开始。
 
-就是你现在看到的这个方块小世界：小河、茅草屋、一棵枣树，四季、昼夜和雨雪都会变。
+## 🌿 natume.party · 河边小屋
 
-- 用 three.js 搭的方块场景，部署在 Cloudflare
-- 源码：[github.com/zhout1995416-commits/natume-party](https://github.com/zhout1995416-commits/natume-party)
+你现在所在的地方：一条小河、一座茅草屋、一棵会掉枣子的树。
 
-## （下一个作品）
+- **四季变化**：春日开花、夏天青枣、秋日红叶、冬天积雪。
+- **天气与时间**：晴雨、昼夜，以及会亮灯的小屋。
+- **互动探索**：摇枣树、拾枣子、点开屋门、看河上的纸船。
+- **实现方式**：Three.js + 原生 JavaScript，Cloudflare Workers 静态部署。
 
-（一句话介绍，加一个链接。改这个文件就行：`public/content/works.md`。）
+[查看这个网站的公开源码](https://github.com/Natume-party/natume-party)
+
+---
+
+以后有想分享的作品，也会慢慢放在这里。
