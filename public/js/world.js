@@ -961,24 +961,30 @@ export function generateWorld() {
     if (d > patch[2] * 0.76 && rng() > 0.42) continue;
     groundFlowers.push({ x, z, c: rng(), s: 0.65 + rng() * 0.52, v: rng() });
   }
-  // 芦苇：成丛长，不要沿河一根一根排成栅栏
+  // 湿地芦苇：沿真实岸线低密度成丛生长，每一根重新查根部网格与水陆高度。
+  // 远离桥头和通道，短矮的叶片不会像旧版直立粗针/香蒲栅栏。
   const reeds = [];
-  for (let x = -25; x <= 25; x += 1.2 + rng() * 3.4) {
+  let reedFloatingCount = 0;
+  for (let x = -25; x <= 25; x += 1.8 + rng() * 2.8) {
     for (const side of [-1, 1]) {
-      if (rng() > 0.58) continue;
-      if (x >= PATH_X0 - 3 && x <= PATH_X1 + 3) continue;
-      const bx = x + (rng() - 0.5) * 0.7;
-      const bz = riverZ(bx) + side * (RIVER_HALF + 0.1 + rng() * 0.55);
-      const xb0 = Math.round(bx * V), zb0 = Math.round(bz * V);
-      const h0 = getH(xb0, zb0);
-      if (h0 !== 0 || grid.get(xb0, 1, zb0)) continue;
-      const n = 2 + Math.floor(rng() * 4);
+      if (rng() > 0.5 || (x >= PATH_X0 - 3 && x <= PATH_X1 + 3)) continue;
+      const bx = x + (rng() - 0.5) * 0.72;
+      const bz = riverZ(bx) + side * (RIVER_HALF + 0.25 + rng() * 0.42);
+      const n = 3 + Math.floor(rng() * 2);
       for (let k = 0; k < n; k++) {
-        const a = rng() * Math.PI * 2, rr = rng() * 0.5;
-        reeds.push({
-          x: bx + Math.cos(a) * rr, z: bz + Math.sin(a) * rr,
-          h: 0.32 + rng() * 0.54, v: rng(), a, r: rr,
-        });
+        const a = k * (Math.PI * 2 / n) + rng() * 0.35;
+        const rr = (0.12 + rng() * 0.32) * (k % 2 ? 1 : 0.72);
+        const px = bx + Math.cos(a) * rr, pz = bz + Math.sin(a) * rr;
+        const xi = Math.round(px * V), zi = Math.round(pz * V), h = getH(xi, zi);
+        if (h !== 0 || (grid.get(xi, 0, zi) !== T.GRASS &&
+            grid.get(xi, 0, zi) !== T.WETSAND && grid.get(xi, 0, zi) !== T.SAND)) continue;
+        if (grid.get(xi, 1, zi) || isPath(px, pz)) continue;
+        const ground = (h + 0.5) / V;
+        const height = 0.37 + rng() * 0.39;
+        const rooted = Number.isFinite(ground) && height >= 0.32;
+        if (!rooted) { reedFloatingCount++; continue; }
+        reeds.push({ x: px, z: pz, y: ground - 0.025, h: height,
+          v: rng(), a, r: rr, cattail: k === 0 && rng() < 0.62 });
       }
     }
   }
@@ -1038,6 +1044,7 @@ export function generateWorld() {
       treeCanopyTop: Math.max(...leafCells.map((cell) => cell.y)) / V,
       forestShapeCounts,
       forestGroundRootMode: 'minimal-ground-collar',
+      reedFloatingCount,
       forestGroundedCount,
       forestPedestalViolations,
       benchSeatWorldHeight: Math.max(2, Math.round(0.75 * V)) / V,
