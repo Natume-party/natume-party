@@ -18,8 +18,8 @@ for (const touch of [true, false]) {
   const scope = {
     matchMedia: (query) => ({ matches: touch && query === '(pointer: coarse)' }),
   };
-  runInNewContext(generator + '\nglobalThis.testWorld = { V, generateWorld, T, HUT, TREE };', scope);
-  const { V, generateWorld, T, HUT, TREE } = scope.testWorld;
+  runInNewContext(generator + '\nglobalThis.testWorld = { V, generateWorld, T, HUT, TREE, FIELD, riverZ, RIVER_HALF };', scope);
+  const { V, generateWorld, T, HUT, TREE, FIELD, riverZ, RIVER_HALF } = scope.testWorld;
   assert.equal(V, touch ? 2 : 3, 'Voxel density mismatches test device');
   const world = generateWorld();
   const { modelQA: qa } = world;
@@ -45,6 +45,33 @@ for (const touch of [true, false]) {
   assert.ok(qa.cottageDepth >= 4.25 && qa.cottageDepth <= 5,
     'Cottage extra depth must remain proportionate');
   assert.equal(world.yard.connectsToTree, true, 'Courtyard spur must reach the hero tree');
+  // Farm visitors need a separate continuous path from orchard yard to the field's working edge.
+  for (let i = 0; i <= 7; i++) {
+    const t = i / 7, x = 3.8 + (FIELD.x0 - 1.05 - 3.8) * t;
+    const z = -4.96 - 3.04 * t - 0.13 * Math.sin(Math.PI * t);
+    assert.equal(surface(x, z), T.PATH, 'Farm approach disconnected at sample ' + i);
+  }
+  // The windmill trail must go around the house and stop before the stone tower foundation.
+  for (const [x, z] of [[-5.7, -6.5], [-3.5, -10], [-3.5, -13],
+    [-3.5, -17.5], [-5.4, -22.5], [-8, -26.2]]) {
+    assert.equal(surface(x, z), T.PATH, 'Windmill walking trail disconnected');
+  }
+  assert.equal(surface(FIELD.x0 + 0.7, -7), T.SOIL, 'Field must retain planted soil');
+  assert.equal(qa.windmillDoorOpen, true, 'Windmill entry must be a real opening');
+  assert.ok(world.windmill && world.windmill.hub.z > -27.5,
+    'Windmill blades must hang outside the front wall');
+  // Both banks should transition through wet sand, dry sand and grass, not a constant paved rim.
+  const shore = { wet: 0, sand: 0, grass: 0 };
+  for (let x = -19; x <= 20; x++) for (let d = 2.4; d <= 4.1; d += .22) {
+    for (const bank of [-1, 1]) {
+      const material = surface(x, riverZ(x) + bank * d);
+      if (material === T.WETSAND) shore.wet++;
+      else if (material === T.SAND) shore.sand++;
+      else if (material === T.GRASS) shore.grass++;
+    }
+  }
+  assert.ok(shore.wet > 5 && shore.sand > 5 && shore.grass > 5,
+    'Creek shoreline must include wet/dry/vegetated transitions');
   for (const x of [-8, -6, -4, -2, 0, 2, 4]) {
     const t = (x - HUT.doorX) / (TREE.x - 1.25 - HUT.doorX);
     const z = HUT.z1 + 1.82 + 2.24 * Math.pow(t, 0.82) + 0.16 * Math.sin(t * Math.PI);
@@ -84,4 +111,7 @@ for (const touch of [true, false]) {
     ' V=' + V + ' trees=' + JSON.stringify(shapes) + '\n');
 
   function gridCell(x, y, z) { return world.grid.get(x, y, z); }
+  function surface(x, z) {
+    return gridCell(Math.round(x * V), Math.round(world.getH(x, z) * V), Math.round(z * V));
+  }
 }
