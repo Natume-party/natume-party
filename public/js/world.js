@@ -873,18 +873,27 @@ export function generateWorld() {
     x: c.x / V, y: (c.y - 0.4) / V, z: c.z / V, v: hash3(c.x, c.y, c.z),
   }));
 
-  // ---- 草地上的小花、河边芦苇 ----
+  // ---- 草甸野花与水岸芦苇：按生境群落生长，而非在视野内均匀撒彩色点 ----
   const groundFlowers = [];
-  for (let i = 0; i < 700 && groundFlowers.length < 78; i++) {
-    const x = (rng() * 2 - 1) * 20, z = (rng() * 2 - 1) * 20;
+  const wildflowerPatches = [
+    [-17.5, -7.5, 2.9], [-13.8, -3.1, 2.1], [-3.8, -1.8, 2.5],
+    [0.1, -9.7, 2.5], [5.4, -10.4, 2.2], [12.6, -11.4, 2.5],
+    [12.1, 0.3, 2.4], [1.4, 0.0, 2.1],
+  ];
+  // 小群落之间保留草地和常走的路：彩色花朵不能占据门、道路、农田或树根。
+  for (let i = 0; i < 1500 && groundFlowers.length < 74; i++) {
+    const patch = wildflowerPatches[Math.floor(rng() * wildflowerPatches.length)];
+    const a = rng() * Math.PI * 2, d = Math.sqrt(rng()) * patch[2];
+    const x = patch[0] + Math.cos(a) * d, z = patch[1] + Math.sin(a) * d;
     const xb = Math.round(x * V), zb = Math.round(z * V);
-    if (Math.hypot(x, z) > 20) continue;
-    // 成片开花：有花丛也有空草地
-    if (fbm(x * 0.16 + 4, z * 0.16 - 9) < 0.46) continue;
     if (getH(xb, zb) !== 0 || grid.get(xb, 0, zb) !== T.GRASS || grid.get(xb, 1, zb)) continue;
-    if (Math.abs(z - riverZ(x)) < RIVER_HALF + 1.6) continue;
-    if (Math.hypot(x - tb.x, z - tb.z) < 2) continue;
-    groundFlowers.push({ x, z, c: rng(), s: 0.7 + rng() * 0.5, v: rng() });
+    if (isPath(x, z) || inYard(x, z)) continue;
+    if (rectDist(HUT_ZONE, x, z) < 0.9 || rectDist(FIELD_ZONE, x, z) < 0.75) continue;
+    if (Math.abs(z - riverZ(x)) < RIVER_HALF + 1.35) continue;
+    if (Math.hypot(x - TREE.x, z - TREE.z) < 2.35) continue;
+    // 群落内部有疏有密，外围逐渐变稀，减少等密度撒点的人工感。
+    if (d > patch[2] * 0.76 && rng() > 0.42) continue;
+    groundFlowers.push({ x, z, c: rng(), s: 0.65 + rng() * 0.52, v: rng() });
   }
   // 芦苇：成丛长，不要沿河一根一根排成栅栏
   const reeds = [];
