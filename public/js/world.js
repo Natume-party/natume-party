@@ -159,7 +159,30 @@ export function generateWorld() {
     const wornEdge = 0.08 * (hash3(Math.round(xw * V), 13, Math.round(zw * V)) - 0.5);
     return Math.abs(zw - centerZ) < halfWidth + wornEdge;
   };
-  const isPath = (xw, zw) => isPrimaryPath(xw, zw) || yardSpur(xw, zw);
+  // 农田需有可走通路：从枣树支路向东南伸到田块西边，
+  // 不压种植垄，不穿过树根，也不把院子铺成硬地广场。
+  const farmApproach = (xw, zw) => {
+    const start = 3.8, end = FIELD.x0 - 1.05;
+    if (xw < start || xw > end) return false;
+    const t = (xw - start) / (end - start);
+    const centerZ = -4.96 - 3.04 * t - 0.13 * Math.sin(Math.PI * t);
+    return Math.abs(zw - centerZ) <= 0.62 + 0.05 * (hash3(Math.round(xw * V), 19, Math.round(zw * V)) - 0.5);
+  };
+  // 风车的步道绕屋东侧向山坡延伸，终点停在风车基础之外。
+  // 不允许从屋墙内部直穿过去，也不应当铺到风车门坎的石基座里。
+  const millWaypoints = [[-5.7, -6.5], [-3.5, -10], [-3.5, -17.5],
+    [-5.4, -22.5], [-8.0, -26.2]];
+  const windmillTrack = (xw, zw) => {
+    for (let i = 1; i < millWaypoints.length; i++) {
+      const [ax, az] = millWaypoints[i - 1], [bx, bz] = millWaypoints[i];
+      const dx = bx - ax, dz = bz - az;
+      const t = Math.max(0, Math.min(1, ((xw - ax) * dx + (zw - az) * dz) / (dx * dx + dz * dz)));
+      if ((xw - ax - t * dx) ** 2 + (zw - az - t * dz) ** 2 <= 0.55 ** 2) return true;
+    }
+    return false;
+  };
+  const isPath = (xw, zw) =>
+    isPrimaryPath(xw, zw) || yardSpur(xw, zw) || farmApproach(xw, zw) || windmillTrack(xw, zw);
   // 留一块近门端有植被空隙的庭院，而非让河岸上的路径直接贴住屋墙。
   const inYard = (xw, zw) => {
     const dx = (xw - HUT.doorX) / 3.3, dz = (zw - (HUT.z1 + 1.8)) / 2.45;
@@ -959,6 +982,8 @@ export function generateWorld() {
       bankDistance: Math.abs(HUT.z1 - riverZ(HUT.doorX)) - RIVER_HALF,
       spurEnd: { x: TREE.x - 1.25, z: (HUT.z1 + 1.82) + 2.24 },
       connectsToTree: isPath(TREE.x - 1.25, (HUT.z1 + 1.82) + 2.24),
+      farmApproach: { x: FIELD.x0 - 1.05, z: -8.0 },
+      windmillApproach: { x: -8.0, z: -26.2 },
     },
     windowWidth: windowCells / V,
     modelQA: {
