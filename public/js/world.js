@@ -26,8 +26,10 @@ export const RIVER_HALF = 2.3;
 export const riverZ = (x) => 3 + 4 * Math.sin(x * 0.11) + 2 * Math.sin(x * 0.047 + 1.3);
 
 // 房屋、枣树、小路的位置（世界单位）
-export const HUT = { x0: -12, x1: -6, z0: -11, z1: -7, doorX: -9 };
-const HUT_ZONE = { x0: -15, x1: -3, z0: -14, z1: -5 };
+// 小屋置于河流内侧的干燥台地，向远离河道的 -Z 方向后退 2 世界单位。
+// 锁定小屋主体尺寸与中轴，路径、烟囱、门窗、照明必须跟随这个锚点。
+export const HUT = { x0: -12, x1: -6, z0: -13, z1: -9, doorX: -9 };
+const HUT_ZONE = { x0: -15, x1: -3, z0: -16, z1: -7 };
 export const TREE = { x: 6, z: -3 };
 const TREE_ZONE = { x0: 0, x1: 12, z0: -9, z1: 2 };
 const PATH_X0 = -10, PATH_X1 = -8;
@@ -143,7 +145,12 @@ export function generateWorld() {
   // 小路范围：从屋门向南穿过小桥
   const rzDoor = riverZ(HUT.doorX);
   const pathZ1 = Math.ceil(rzDoor + RIVER_HALF) + 5;
-  const isPath = (xw, zw) => xw >= PATH_X0 && xw <= PATH_X1 && zw >= HUT.z1 + 1 && zw <= pathZ1;
+  const isPath = (xw, zw) => xw >= PATH_X0 && xw <= PATH_X1 && zw >= HUT.z1 + 0.3 && zw <= pathZ1;
+  // 留一块近门端有植被空隙的庭院，而非让河岸上的路径直接贴住屋墙。
+  const inYard = (xw, zw) => {
+    const dx = (xw - HUT.doorX) / 3.3, dz = (zw - (HUT.z1 + 1.8)) / 2.45;
+    return dx * dx + dz * dz < 1 && fbm(xw * 0.72 + 8, zw * 0.68 - 1) > 0.39;
+  };
 
   for (let xb = -RB; xb <= RB; xb++) {
     for (let zb = -RB; zb <= RB; zb++) {
@@ -176,7 +183,7 @@ export function generateWorld() {
         let t;
         if (depth === 0) {
           if (river) t = T.SAND;
-          else if (isPath(xw, zw)) t = T.PATH;
+          else if (isPath(xw, zw) || inYard(xw, zw)) t = T.PATH;
           // 岸线用噪声推一下：等宽的一条浅色带看着像水泥路缘
           else if (h <= 0 && rd < RIVER_HALF + 0.24 + fbm(xw * 0.75 + 2, zw * 0.75 - 6) * 0.65) {
             t = rd < RIVER_HALF + 0.11 + fbm(xw * 1.3, zw * 1.3) * 0.25 ? T.WETSAND : T.SAND;
@@ -712,7 +719,7 @@ export function generateWorld() {
     for (let z = hz0 - ov + half; z <= hz1 + ov - half; z++) grid.set(x, roofY + half + 1, z, T.RIDGE);
   }
   // 烟囱：石砌 + 帽
-  const chimney = { x: -7.5, z: -9 };
+  const chimney = { x: HUT.x1 - 1.5, z: HUT.z0 + 2 };
   const chx = Math.round(chimney.x * V), chz = Math.round(chimney.z * V);
   const chTop = roofY + half + 4;
   for (let y = wy0 + 3; y <= chTop; y++) {
@@ -892,6 +899,7 @@ export function generateWorld() {
     tufts, lilies, hillShrubs, hillStones,
     windmill: hub ? { hub, ground: wmGround / V, top: wmTop / V } : null,
     door: { x: (doorX0 + doorX1) / 2 / V, z: HUT.z1, width: doorCells / V },
+    yard: { x: HUT.doorX, z: HUT.z1 + 1.8, pathStartZ: HUT.z1 + 0.3, bankDistance: Math.abs(HUT.z1 - riverZ(HUT.doorX)) - RIVER_HALF },
     windowWidth: windowCells / V,
     modelQA: {
       doorCenterError: Math.abs((doorX0 + doorX1) / 2 / V - HUT.doorX),
