@@ -467,6 +467,7 @@ export function generateWorld() {
   // 按形态而不是只按半径分四种树：高挑、低展、圆冠、不规则松。
   // 用世界位置决定形态，保证同一视角刷新后造型稳定。
   const forestShapeCounts = { round: 0, tall: 0, spreading: 0, pine: 0 };
+  let forestGroundedCount = 0, forestPedestalViolations = 0;
   for (const site of balancedForest) {
     const { xb, zb, h } = site;
     const kind = hash3(xb, h + 17, zb);
@@ -502,6 +503,12 @@ export function generateWorld() {
           if (grid.get(rx, y, rz) === T.AIR) grid.set(rx, y, rz, T.MLOG);
       }
     }
+    // 真实检查每棵树中心根与土地相连，检查距地面约 2 小格处已没有方形底座。
+    if (grid.get(xb, h + 1, zb) === T.MLOG) forestGroundedCount++;
+    const pedestalY = h + Math.max(2, Math.round(0.75 * V));
+    const pedestalArms = [[1,0],[-1,0],[0,1],[0,-1]]
+      .filter(([dx,dz]) => grid.get(xb + dx, pedestalY, zb + dz) === T.MLOG).length;
+    if (pedestalArms >= 3) forestPedestalViolations++;
     const cx = xb + bendX, cz = zb + bendZ, top = h + trunkH;
     const S = (u) => Math.round(u * V * sc);
     if (species === 'pine') {
@@ -1034,6 +1041,8 @@ export function generateWorld() {
       treeCanopyTop: Math.max(...leafCells.map((cell) => cell.y)) / V,
       forestShapeCounts,
       forestGroundRootMode: 'tapered-shallow-roots',
+      forestGroundedCount,
+      forestPedestalViolations,
       benchSeatWorldHeight: Math.max(2, Math.round(0.75 * V)) / V,
       cottageRoofRise: riseAt(Math.round(ridgeZ)) / V,
       cottageRoofAxisError: Math.abs(riseAt(roofStartZ) - riseAt(roofEndZ)),
