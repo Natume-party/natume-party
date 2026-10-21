@@ -370,13 +370,13 @@ if (W.windmill) {
   const { hub } = W.windmill;
   sailGroup = new THREE.Group();
   sailGroup.position.set(hub.x, hub.y, hub.z);
-  // 回退前一版紧凑帆翼：禁止旧的斜转帆面再次穿进塔身。
-  // 同一平面沿 z 轴旋转，整个旋转周期的最近投影始终留在外墙前方。
-  sailGroup.position.z += 0.25;
+  // 保留紧凑帆翼且不斜转。原 +0.25 在 V=2 会扫入前伸的茅草屋顶。
+  // 模型逐帧体素检测确认 +0.50 在 V=2/V=3 全部 36 个旋转角度无实体交叠。
+  sailGroup.position.z += 0.50;
   sailGroup.rotation.y = 0;
-  // world.js 轮毂位于塔墙外 1 个体素；旧帆叶木轴最厚 0.54 世界单位。
-  // 按体素实际前墙外表面额外预留 0.5/V，V=3 仍有 >=0.14 净距。
-  sailGroup.userData.clearanceToTower = 0.5 / V + 0.25 - 0.27;
+  // 本值仅为塔墙正面的保守净距；完整防穿模由 tests/model-geometry.mjs
+  // 对实际旋翼组件、茅草顶和体素实体执行 0–350° 逐角采样。
+  sailGroup.userData.clearanceToTower = 0.5 / V + 0.50 - 0.27;
   const beamMat = new THREE.MeshLambertMaterial({ color: 0x7a5c42 });
   const clothMat = new THREE.MeshLambertMaterial({ color: 0xe4d6b6 });
   const axle = new THREE.Mesh(new THREE.BoxGeometry(0.47, 0.47, 0.54), beamMat);
