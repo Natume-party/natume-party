@@ -41,6 +41,56 @@ for (const fragment of [
   'boatQA: () =>',
 ]) assert.ok(mainSource.includes(fragment), 'Lost paper-boat action: ' + fragment);
 
+// Exercise the real boat onTap function and frame-motion branch in a VM,
+// without confusing this handler test with a real browser pointer/WebGL E2E.
+const tapStart = mainSource.indexOf('function onTap(cx, cy) {');
+const tapEnd = mainSource.indexOf('\nlet down = null;', tapStart);
+const boatFrameStart = mainSource.indexOf("if (state.season !== 'winter') {\n    boatX +=");
+const boatFrameEnd = mainSource.indexOf('\n  if (boatRippleTime > 0)', boatFrameStart);
+assert.ok(tapStart > 0 && tapEnd > tapStart, 'Cannot extract onTap handler');
+assert.ok(boatFrameStart > 0 && boatFrameEnd > boatFrameStart, 'Cannot extract boat frame dynamics');
+for (const season of ['summer', 'winter']) {
+  let clock = 1000;
+  const opened = [];
+  const ctx = {
+    pickKind: () => ({ kind: 'boat' }), hideHint() {}, toast() {},
+    controls: { autoRotate: true }, audio: { pop() {} },
+    performance: { now: () => clock }, state: { season, rain: false },
+    boatPush: 0, boatX: -12, boatRippleTime: 0,
+    boatTapCount: 0, boatLastTap: -Infinity, dt: 0.2,
+    BOAT_X0: -24, BOAT_X1: 22, V: 2,
+    boat: { position: { x: -12, z: 4 } },
+    boatRipple: { visible: false, position: { set() {} } },
+    hut: { latestDiary: async () => ({ slug: 'regression-entry' }),
+      open: (...args) => opened.push(args) },
+  };
+  runInNewContext(mainSource.slice(tapStart, tapEnd) + '\nglobalThis.tap = onTap;', ctx);
+  ctx.tap(100, 100);
+  assert.equal(ctx.boatTapCount, 1, season + ': first tap must register');
+  assert.equal(ctx.controls.autoRotate, false, 'Boat interaction must stop camera orbit');
+  if (season === 'summer') {
+    assert.equal(ctx.boatPush, 3.2, 'Summer first tap should impart velocity');
+    assert.equal(ctx.boatRipple.visible, true, 'Summer first tap should show ripple');
+  } else {
+    assert.equal(ctx.boatPush, 0, 'Ice should not accelerate boat');
+    assert.equal(ctx.boatRipple.visible, false, 'Ice should not create water ripple');
+  }
+  runInNewContext(mainSource.slice(boatFrameStart, boatFrameEnd), ctx);
+  if (season === 'summer') {
+    assert.ok(ctx.boatX > -11.3, 'Boat must advance during the next frame');
+    assert.ok(ctx.boatPush < 3.2 && ctx.boatPush > 0, 'Boat impulse must decay');
+  } else {
+    assert.equal(ctx.boatX, -12, 'Boat must remain frozen');
+  }
+  clock = 1200;
+  ctx.tap(100, 100);
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(opened.length, 1, 'Second tap must open the diary once');
+  assert.deepEqual(Array.from(opened[0]), ['diary', 'regression-entry'],
+    'Boat should preserve previous latest-diary action');
+}
+
 const generator = source.slice(0, boundary)
   .replace(/^import \* as THREE from 'three';\s*/m, '')
   .replace(/\bexport (?=(const|function|class)\b)/g, '');
@@ -100,11 +150,55 @@ for (const touch of [true, false]) {
   }
   assert.equal(surface(FIELD.x0 + 0.7, -7), T.SOIL, 'Field must retain planted soil');
   assert.equal(qa.windmillDoorOpen, true, 'Windmill entry must be a real opening');
-  const rotorToTowerFace = 0.5 / V + forward - axleDepth / 2;
-  for (let degrees = 0; degrees < 360; degrees += 15) {
-    // z remains invariant when rotating around z with yaw 0.
-    assert.ok(rotorToTowerFace > 0.12,
-      'Windmill rotor may intersect the tower at angle ' + degrees);
+  // Build the *actual* windmill meshes from main.js using minimal Three.js
+  // test doubles; a fixed z-clearance alone misses the overhanging thatch roof.
+  class FakeNode {
+    constructor() {
+      this.children = [];
+      this.position = { x: 0, y: 0, z: 0, set(x, y, z) { Object.assign(this, { x, y, z }); } };
+      this.rotation = { x: 0, y: 0, z: 0 };
+      this.userData = {};
+    }
+    add(obj) { this.children.push(obj); }
+  }
+  class FakeMesh extends FakeNode { constructor(geometry) { super(); this.geometry = geometry; } }
+  class FakeBoxGeometry {
+    constructor(width, height, depth) { Object.assign(this, { width, height, depth }); }
+  }
+  const rotor = runInNewContext(sailBlock + '\nsailGroup;', {
+    THREE: { Group: FakeNode, Mesh: FakeMesh, BoxGeometry: FakeBoxGeometry,
+      MeshLambertMaterial: class {} },
+    W: world, V, scene: { add() {} },
+  });
+  assert.ok(rotor && rotor.rotation.y === 0, 'Windmill sails must face the tower front');
+  assert.equal(rotor.children.length, 5, 'Windmill must retain axle and four blades');
+  const boxes = [{ mesh: rotor.children[0], arm: null },
+    ...rotor.children.slice(1).flatMap(arm => arm.children.map(mesh => ({ mesh, arm })))];
+  assert.equal(boxes.length, 29, 'Unexpected windmill construction: check sweep model');
+  const rotate2 = (x, y, a) =>
+    [x * Math.cos(a) - y * Math.sin(a), x * Math.sin(a) + y * Math.cos(a)];
+  for (let degrees = 0; degrees < 360; degrees += 10) {
+    const angle = degrees * Math.PI / 180;
+    for (const { mesh, arm } of boxes) {
+      const g = mesh.geometry;
+      assert.ok(g instanceof FakeBoxGeometry, 'Windmill sweep needs complete mesh coverage');
+      // Sample corners, middle planes and the long sail spans in world coordinates,
+      // rotating the real parent-arm and the full rotor for each frame.
+      for (const ux of [-1, -0.5, 0, 0.5, 1])
+        for (const uy of [-1, 0, 1])
+          for (const uz of [-1, 0, 1]) {
+            let [x, y] = rotate2(mesh.position.x + ux * g.width / 2,
+              mesh.position.y + uy * g.height / 2, arm?.rotation.z ?? 0);
+            [x, y] = rotate2(x, y, angle);
+            const wx = rotor.position.x + x, wy = rotor.position.y + y;
+            const wz = rotor.position.z + mesh.position.z + uz * g.depth / 2;
+            assert.equal(world.grid.get(Math.round(wx * V), Math.round(wy * V),
+              Math.round(wz * V)), T.AIR,
+            'Windmill rotor intersects terrain/tower/thatch: V=' + V +
+              ' angle=' + degrees + ' world=(' +
+              [wx, wy, wz].map(n => n.toFixed(3)).join(',') + ')');
+          }
+    }
   }
   assert.ok(world.windmill && world.windmill.hub.z > -27.5,
     'Windmill blades must hang outside the front wall');
