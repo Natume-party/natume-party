@@ -94,9 +94,7 @@ sun.castShadow = true;
 sun.shadow.mapSize.set(isTouch ? 1024 : 2048, isTouch ? 1024 : 2048);
 Object.assign(sun.shadow.camera, { left: -46, right: 46, top: 46, bottom: -46, near: 1, far: 320 });
 sun.shadow.bias = -0.0016;
-sun.shadow.normalBias = 0.11;
-// 稍缓和坡地树根投影的边缘锯齿与黑块；不启用昂贵的 VSM 模式。
-sun.shadow.radius = 2.2;
+sun.shadow.normalBias = 0.14;
 scene.add(sun, sun.target);
 const SHADOW_CENTER = new THREE.Vector3(-1, 0, -2);
 sun.target.position.copy(SHADOW_CENTER);
@@ -372,26 +370,29 @@ if (W.windmill) {
   const { hub } = W.windmill;
   sailGroup = new THREE.Group();
   sailGroup.position.set(hub.x, hub.y, hub.z);
-  // 主镜头正面要能看到布翼宽面；旧角度 -0.5 把风车拍得只剩细十字。
-  sailGroup.rotation.y = -0.12;
+  // 回退前一版紧凑帆翼：禁止旧的斜转帆面再次穿进塔身。
+  // 同一平面沿 z 轴旋转，整个旋转周期的最近投影始终留在外墙前方。
+  sailGroup.position.z += 0.18;
+  sailGroup.rotation.y = 0;
+  // world.js 轮毂位于塔墙外 1 个体素；旧帆叶木轴最厚 0.54 世界单位。
+  // V=3 也留有 >=0.24 世界单位安全净距（1/3+0.18-0.27）。
+  sailGroup.userData.clearanceToTower = 1 / V + 0.18 - 0.27;
   const beamMat = new THREE.MeshLambertMaterial({ color: 0x7a5c42 });
-  const clothMat = new THREE.MeshLambertMaterial({ color: 0xe4d6b6, side: THREE.DoubleSide });
+  const clothMat = new THREE.MeshLambertMaterial({ color: 0xe4d6b6 });
   const axle = new THREE.Mesh(new THREE.BoxGeometry(0.47, 0.47, 0.54), beamMat);
   sailGroup.add(axle);
   for (let i = 0; i < 4; i++) {
     const arm = new THREE.Group();
     arm.rotation.z = (i / 4) * Math.PI * 2;
-    const spine = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.86, 0.12), beamMat);
-    spine.position.y = 1.43;
+    const spine = new THREE.Mesh(new THREE.BoxGeometry(0.09, 2.9, 0.09), beamMat);
+    spine.position.y = 1.45;
     arm.add(spine);
-    // 三段微重叠的帆布沿木梁排布，形成完整可辨的梯形帆翼，不再像三张散纸片。
     for (let k = 0; k < 3; k++) {
-      const width = [0.75, 0.86, 0.66][k];
-      const cloth = new THREE.Mesh(new THREE.BoxGeometry(width, 0.89, 0.055), clothMat);
-      cloth.position.set(width * 0.54, 1.00 + k * 0.73, 0);
+      const cloth = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.62, 0.04), clothMat);
+      cloth.position.set(0.37, 1.0 + k * 0.72, 0);
       arm.add(cloth);
-      const bar = new THREE.Mesh(new THREE.BoxGeometry(width + 0.16, 0.055, 0.065), beamMat);
-      bar.position.set(width * 0.49, 1.39 + k * 0.73, 0.035);
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.05, 0.05), beamMat);
+      bar.position.set(0.36, 1.32 + k * 0.72, 0);
       arm.add(bar);
     }
     sailGroup.add(arm);
@@ -1025,9 +1026,9 @@ function updateSky(hour) {
   // 地面反弹光偏草色，方块减半后竖直面太多，原来的土褐色会把整片山坡刷成横纹
   // 地面反光和天空色拉近：竖直面与水平面的半球光差太大，台阶会连成棋盘格
   hemi.groundColor.set(0xb5ab8e);
-  hemi.intensity = (0.28 + 0.41 * day) * (state.rain ? 0.85 : 1);
+  hemi.intensity = (0.22 + 0.34 * day) * (state.rain ? 0.85 : 1);
   // 阴影里留一点底光，不然墙面在低角度太阳下会糊成一片黑
-  ambient.intensity = 0.16 + 0.28 * (1 - day) + 0.27 * dusk;
+  ambient.intensity = 0.1 + 0.34 * (1 - day) + 0.3 * dusk;
   // 白天补光偏暖：草泥墙在影子里别被天光染成蓝灰
   ambient.color.copy(COL.ambDay).lerp(COL.ambNight, 1 - day);
 
