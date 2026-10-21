@@ -370,21 +370,26 @@ if (W.windmill) {
   const { hub } = W.windmill;
   sailGroup = new THREE.Group();
   sailGroup.position.set(hub.x, hub.y, hub.z);
-  sailGroup.rotation.y = -0.5;
+  // 主镜头正面要能看到布翼宽面；旧角度 -0.5 把风车拍得只剩细十字。
+  sailGroup.rotation.y = -0.12;
   const beamMat = new THREE.MeshLambertMaterial({ color: 0x7a5c42 });
-  const clothMat = new THREE.MeshLambertMaterial({ color: 0xe4d6b6 });
+  const clothMat = new THREE.MeshLambertMaterial({ color: 0xe4d6b6, side: THREE.DoubleSide });
+  const axle = new THREE.Mesh(new THREE.BoxGeometry(0.47, 0.47, 0.54), beamMat);
+  sailGroup.add(axle);
   for (let i = 0; i < 4; i++) {
     const arm = new THREE.Group();
     arm.rotation.z = (i / 4) * Math.PI * 2;
-    const spine = new THREE.Mesh(new THREE.BoxGeometry(0.09, 2.9, 0.09), beamMat);
-    spine.position.y = 1.45;
+    const spine = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.86, 0.12), beamMat);
+    spine.position.y = 1.43;
     arm.add(spine);
+    // 三段微重叠的帆布沿木梁排布，形成完整可辨的梯形帆翼，不再像三张散纸片。
     for (let k = 0; k < 3; k++) {
-      const cloth = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.62, 0.04), clothMat);
-      cloth.position.set(0.37, 1.0 + k * 0.72, 0);
+      const width = [0.75, 0.86, 0.66][k];
+      const cloth = new THREE.Mesh(new THREE.BoxGeometry(width, 0.89, 0.055), clothMat);
+      cloth.position.set(width * 0.54, 1.00 + k * 0.73, 0);
       arm.add(cloth);
-      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.05, 0.05), beamMat);
-      bar.position.set(0.36, 1.32 + k * 0.72, 0);
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(width + 0.16, 0.055, 0.065), beamMat);
+      bar.position.set(width * 0.49, 1.39 + k * 0.73, 0.035);
       arm.add(bar);
     }
     sailGroup.add(arm);
