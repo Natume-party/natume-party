@@ -482,14 +482,25 @@ export function generateWorld() {
     const trunkH = Math.max(2 * V, Math.round((tall ? 3.45 : species === 'pine' ? 3.05 : 2.3) * sc * V));
     const bendX = Math.round((hash3(xb, 29, zb) - 0.5) * 0.7 * V);
     const bendZ = Math.round((hash3(xb, 51, zb) - 0.5) * 0.6 * V);
+    // 主干连续生长，上下不再从高达 30% 树高的 3x3 黑方柱突然收成细杆。
     for (let y = 1; y <= trunkH; y++) {
-      const wide = !tall && y <= Math.ceil(trunkH * 0.3);
-      const halfWidth = wide && V >= 3 ? 1 : 0;
       const sx = xb + Math.round(bendX * y / trunkH);
       const sz = zb + Math.round(bendZ * y / trunkH);
-      for (let dx = -halfWidth; dx <= halfWidth; dx++)
-        for (let dz = -halfWidth; dz <= halfWidth; dz++)
-          grid.set(sx + dx, h + y, sz + dz, T.MLOG);
+      grid.set(sx, h + y, sz, T.MLOG);
+    }
+    // 四面短根趾顺坡抓地：只填露出土层的根，不铲平山坡，不生成悬空支架。
+    // 根趾最大向外伸半个世界单位，根部实际接触地表，冠幅仍由原四类树型控制。
+    const rootReach = Math.max(1, Math.round(V * (tall ? 0.36 : 0.51)));
+    const rootRise = Math.max(1, Math.round(V * 0.42));
+    for (const [dx, dz] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      for (let k = 1; k <= rootReach; k++) {
+        const rx = xb + dx * k, rz = zb + dz * k;
+        const soilY = getH(rx, rz);
+        if (soilY < 0 || Math.abs(soilY - h) > V) continue;
+        const endY = h + Math.max(1, rootRise - Math.floor((k - 1) * rootRise / rootReach));
+        for (let y = soilY + 1; y <= endY; y++)
+          if (grid.get(rx, y, rz) === T.AIR) grid.set(rx, y, rz, T.MLOG);
+      }
     }
     const cx = xb + bendX, cz = zb + bendZ, top = h + trunkH;
     const S = (u) => Math.round(u * V * sc);
@@ -1009,6 +1020,7 @@ export function generateWorld() {
       totalWindowObstructions: windowObstructions.reduce((sum, n) => sum + n, 0),
       treeCanopyTop: Math.max(...leafCells.map((cell) => cell.y)) / V,
       forestShapeCounts,
+      forestGroundRootMode: 'tapered-shallow-roots',
       cottageRoofRise: riseAt(Math.round(ridgeZ)) / V,
       cottageRoofAxisError: Math.abs(riseAt(roofStartZ) - riseAt(roofEndZ)),
       heroCanopyDiameter: (Math.max(...leafCells.map(c => c.x)) - Math.min(...leafCells.map(c => c.x))) / V,
