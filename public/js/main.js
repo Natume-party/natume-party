@@ -548,7 +548,7 @@ tuftMesh.instanceMatrix.needsUpdate = true;
 
 const lilyMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.42, 0.04, 0.42), new THREE.MeshLambertMaterial({ color: 0x5f9440 }), Math.max(1, W.lilies.length));
 W.lilies.forEach((l, i) => {
-  dummy.position.set(l.x, 0.14, l.z);
+  dummy.position.set(l.x, GROUND_Y + 0.028, l.z);
   dummy.rotation.set(0, l.rot, 0);
   dummy.scale.set(l.s, 1, l.s);
   dummy.updateMatrix();
@@ -597,6 +597,39 @@ reedMesh.castShadow = cattailMesh.castShadow = true;
 reedMesh.receiveShadow = cattailMesh.receiveShadow = true;
 reedMesh.instanceMatrix.needsUpdate = cattailMesh.instanceMatrix.needsUpdate = true;
 scene.add(reedMesh, cattailMesh);
+
+// 统一小件接触阴影：即使低端设备触发动态关阴影，也保留极淡的落地关系。
+// 一批 InstancedMesh + 32px 渐隐径向纹理，避免给每棵草加真实阴影导致掉帧。
+const groundShadowCanvas = document.createElement('canvas');
+groundShadowCanvas.width = groundShadowCanvas.height = 32;
+const groundShadowCtx = groundShadowCanvas.getContext('2d');
+const groundShadowGradient = groundShadowCtx.createRadialGradient(16, 16, 1, 16, 16, 16);
+groundShadowGradient.addColorStop(0, 'rgba(23, 39, 27, 0.36)');
+groundShadowGradient.addColorStop(0.45, 'rgba(23, 39, 27, 0.20)');
+groundShadowGradient.addColorStop(1, 'rgba(23, 39, 27, 0)');
+groundShadowCtx.fillStyle = groundShadowGradient;
+groundShadowCtx.fillRect(0, 0, 32, 32);
+const groundShadowTex = new THREE.CanvasTexture(groundShadowCanvas);
+const CONTACT_MAX = flowerOrder.length + W.reeds.length + W.hillShrubs.length;
+const contactMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1),
+  new THREE.MeshBasicMaterial({ map: groundShadowTex, transparent: true,
+    depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1 }),
+  Math.max(1, CONTACT_MAX));
+contactMesh.frustumCulled = false;
+let contacts = 0;
+function contactAt(x, y, z, size) {
+  dummy.position.set(x, y, z);
+  dummy.rotation.set(-Math.PI / 2, 0, 0);
+  dummy.scale.set(size, size, 1);
+  dummy.updateMatrix();
+  contactMesh.setMatrixAt(contacts++, dummy.matrix);
+}
+flowerOrder.forEach(f => contactAt(f.x, GROUND_Y + 0.012, f.z, 0.30 + f.s * 0.10));
+W.reeds.forEach(q => contactAt(q.x, q.y + 0.032, q.z, 0.22));
+W.hillShrubs.forEach(q => contactAt(q.x, q.y + GROUND_Y + 0.012, q.z, q.size * 0.44));
+contactMesh.count = contacts;
+contactMesh.instanceMatrix.needsUpdate = true;
+scene.add(contactMesh);
 
 // ---------- V3.1 坡地独立布景：低矮灌木团和散石 ----------
 const HILL_SHRUB_COLORS = {
