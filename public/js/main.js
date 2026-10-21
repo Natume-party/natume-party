@@ -1566,6 +1566,10 @@ if (params.get('qa') === '1') {
     sideWindowsAligned: qa.sideWindowAlignError === 0,
     windowsUnobstructed: qa.totalWindowObstructions === 0,
     treeCanopyTouchableAtTop: qa.treeHitTopMargin >= 0.45,
+    cottageInland: W.yard.bankDistance >= 7,
+    roofMirrored: qa.cottageRoofAxisError === 0,
+    roofProportionate: qa.cottageRoofRise >= 1.2 && qa.cottageRoofRise <= 2.1,
+    heroCanopyProportionate: qa.heroCanopyDiameter >= 5 && qa.heroCanopyDiameter <= 7.5,
   };
   const output = document.createElement('output');
   output.id = 'natume-model-qa';
