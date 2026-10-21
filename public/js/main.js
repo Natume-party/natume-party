@@ -67,12 +67,14 @@ function fitCamera() {
 }
 {
   const a = innerWidth / innerHeight;
-  // V3.1 手机竖屏：默认稍微俯视、适度拉远，同时照顾小桥、小屋和枣树。
-  // 保持桌面原取景，不改变用户旋转/缩放后的 OrbitControls 操作。
+  // V3.2 的入口镜头以小屋、枣树为双核心：手机视角稍收紧，
+  // 对准两者中间偏后的庭院，背景林木仅构成边框而非占据前景。
+  // ?framing=classic 可对照上一版手机取景，桌面原视角不变。
   const portraitTouch = isTouch && a < 0.8;
-  if (portraitTouch) controls.target.set(-2, 3, -2);
-  const dist = portraitTouch ? 44 : a < 0.8 ? 37 : 33;
-  const az = 0.62, pol = portraitTouch ? 1.18 : 1.34;
+  const heroFrame = portraitTouch && params.get('framing') !== 'classic';
+  if (portraitTouch) controls.target.set(heroFrame ? -1.7 : -2, 3, heroFrame ? -3.6 : -2);
+  const dist = portraitTouch ? (heroFrame ? 41.5 : 44) : a < 0.8 ? 37 : 33;
+  const az = heroFrame ? 0.59 : 0.62, pol = portraitTouch ? 1.18 : 1.34;
   camera.position.set(
     controls.target.x + dist * Math.sin(pol) * Math.sin(az),
     controls.target.y + dist * Math.cos(pol),
