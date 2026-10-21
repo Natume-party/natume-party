@@ -221,9 +221,13 @@ export function generateWorld() {
         if (depth === 0) {
           if (river) t = T.SAND;
           else if (isPath(xw, zw) || inYard(xw, zw)) t = T.PATH;
-          // 岸线用噪声推一下：等宽的一条浅色带看着像水泥路缘
-          else if (h <= 0 && rd < RIVER_HALF + 0.24 + fbm(xw * 0.75 + 2, zw * 0.75 - 6) * 0.65) {
-            t = rd < RIVER_HALF + 0.11 + fbm(xw * 1.3, zw * 1.3) * 0.25 ? T.WETSAND : T.SAND;
+          // 溪流两侧的淤沙带不应当是固定宽度的“砌边”：借助两尺度岸滩噪声
+          // 形成宽窄变化。紧邻水面的细带保持潮湿，向草甸过渡处自然变干。
+          else if (h <= 0 && rd < RIVER_HALF + 0.14 +
+            0.83 * fbm(xw * 0.38 + 2.7, zw * 0.41 - 6.4) +
+            0.22 * fbm(xw * 1.09 - 4.2, zw * 1.16 + 8)) {
+            const wetLimit = 0.12 + 0.41 * fbm(xw * 0.73 + 5, zw * 0.80 - 8);
+            t = rd - RIVER_HALF < wetLimit ? T.WETSAND : T.SAND;
           }
           else if (steep || rocky) t = T.STONE;
           else if (foot) t = T.SCREE;
