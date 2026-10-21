@@ -94,7 +94,9 @@ sun.castShadow = true;
 sun.shadow.mapSize.set(isTouch ? 1024 : 2048, isTouch ? 1024 : 2048);
 Object.assign(sun.shadow.camera, { left: -46, right: 46, top: 46, bottom: -46, near: 1, far: 320 });
 sun.shadow.bias = -0.0016;
-sun.shadow.normalBias = 0.14;
+sun.shadow.normalBias = 0.11;
+// 稍缓和坡地树根投影的边缘锯齿与黑块；不启用昂贵的 VSM 模式。
+sun.shadow.radius = 2.2;
 scene.add(sun, sun.target);
 const SHADOW_CENTER = new THREE.Vector3(-1, 0, -2);
 sun.target.position.copy(SHADOW_CENTER);
@@ -1023,9 +1025,9 @@ function updateSky(hour) {
   // 地面反弹光偏草色，方块减半后竖直面太多，原来的土褐色会把整片山坡刷成横纹
   // 地面反光和天空色拉近：竖直面与水平面的半球光差太大，台阶会连成棋盘格
   hemi.groundColor.set(0xb5ab8e);
-  hemi.intensity = (0.22 + 0.34 * day) * (state.rain ? 0.85 : 1);
+  hemi.intensity = (0.28 + 0.41 * day) * (state.rain ? 0.85 : 1);
   // 阴影里留一点底光，不然墙面在低角度太阳下会糊成一片黑
-  ambient.intensity = 0.1 + 0.34 * (1 - day) + 0.3 * dusk;
+  ambient.intensity = 0.16 + 0.28 * (1 - day) + 0.27 * dusk;
   // 白天补光偏暖：草泥墙在影子里别被天光染成蓝灰
   ambient.color.copy(COL.ambDay).lerp(COL.ambNight, 1 - day);
 
