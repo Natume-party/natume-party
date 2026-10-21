@@ -28,7 +28,9 @@ export const riverZ = (x) => 3 + 4 * Math.sin(x * 0.11) + 2 * Math.sin(x * 0.047
 // 房屋、枣树、小路的位置（世界单位）
 // 小屋置于河流内侧的干燥台地，向远离河道的 -Z 方向后退 2 世界单位。
 // 锁定小屋主体尺寸与中轴，路径、烟囱、门窗、照明必须跟随这个锚点。
-export const HUT = { x0: -12, x1: -6, z0: -13, z1: -9, doorX: -9 };
+// 保持门与院落中轴 -9 不变：两侧各延伸 0.3 单位，屋后延伸 0.5 单位。
+// 房子实际体量约 +10%，不让门口重新朝河岸挤去。
+export const HUT = { x0: -12.3, x1: -5.7, z0: -13.5, z1: -9, doorX: -9 };
 const HUT_ZONE = { x0: -15, x1: -3, z0: -16, z1: -7 };
 export const TREE = { x: 6, z: -3 };
 const TREE_ZONE = { x0: 0, x1: 12, z0: -9, z1: 2 };
@@ -608,6 +610,7 @@ export function generateWorld() {
   };
   const inRing = (x, z) => x === hx0 || x === hx1 || z === hz0 || z === hz1;
 
+  // 小屋主墙略加宽之后，门窗保留原有节奏：两扇前窗对称，两侧窗自动随深度居中。
   // 窗洞：前墙两扇、两侧各一扇，1 个单位见方
   // 窗洞宽度取奇数体素格，保证两窗与房屋中心的镜像轴严格吻合。
   const windowCells = V % 2 === 0 ? V + 1 : V;
@@ -931,6 +934,8 @@ export function generateWorld() {
       cottageRoofAxisError: Math.abs(riseAt(roofStartZ) - riseAt(roofEndZ)),
       heroCanopyDiameter: (Math.max(...leafCells.map(c => c.x)) - Math.min(...leafCells.map(c => c.x))) / V,
       heroCanopyDepth: (Math.max(...leafCells.map(c => c.z)) - Math.min(...leafCells.map(c => c.z))) / V,
+      cottageWidth: (hx1 - hx0) / V,
+      cottageDepth: (hz1 - hz0) / V,
     },
   };
 }
