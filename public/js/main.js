@@ -473,7 +473,16 @@ const boatHit = hitBox(2.4, 1.8, 2.4, 'boat');
 boat.add(boatHit);
 scene.add(boat);
 const BOAT_X0 = -24, BOAT_X1 = 22;
-let boatX = -12;
+let boatX = -12, boatPush = 0, boatRippleTime = 0, boatLastTap = -Infinity, boatTapCount = 0;
+// 点击纸船后让水面给出即时反馈，而不是仅弹出不相关页面。
+const boatRipple = new THREE.Mesh(
+  new THREE.RingGeometry(0.28, 0.36, 24),
+  new THREE.MeshBasicMaterial({ color: 0xe3f8ef, transparent: true, opacity: 0,
+    side: THREE.DoubleSide, depthWrite: false }));
+boatRipple.rotation.x = -Math.PI / 2;
+boatRipple.renderOrder = 2;
+boatRipple.visible = false;
+scene.add(boatRipple);
 
 // ---------- 小花与芦苇：植株根部统一与地面体素顶面相切 ----------
 const GROUND_Y = 0.5 / V;
@@ -1182,8 +1191,18 @@ function pickKind(cx, cy) {
   const fh = ray.intersectObjects(fallen.filter((f) => !f.collecting).map((f) => f.hit), false);
   if (fh.length) return { kind: 'fruit', f: fh[0].object.userData.fallen };
   const h = ray.intersectObjects([treeHit, doorHit, mailHit, signHit, boatHit], false);
-  if (!h.length) return null;
-  return { kind: h[0].object.userData.kind };
+  if (h.length) return { kind: h[0].object.userData.kind };
+  // 纸船模型很小、又随水流移动：手机触控需要足够大且可见的屏幕点按范围。
+  // 仅在船处于可见河段且位于相机前方时启用，不捕捉远处其它场景。
+  if (boat.scale.x >= 0.45) {
+    const r = renderer.domElement.getBoundingClientRect();
+    const n = boat.position.clone().project(camera);
+    const px = r.left + (n.x + 1) * r.width / 2;
+    const py = r.top + (1 - n.y) * r.height / 2;
+    if (n.z > -1 && n.z < 1 && Math.hypot(cx - px, cy - py) < (isTouch ? 48 : 32))
+      return { kind: 'boat' };
+  }
+  return null;
 }
 function onTap(cx, cy) {
   const p = pickKind(cx, cy);
@@ -1227,8 +1246,26 @@ function onTap(cx, cy) {
     hut.open('works');
   } else if (p.kind === 'boat') {
     audio.pop();
-    toast('纸船上写着一篇日记');
-    hut.latestDiary().then((post) => hut.open('diary', post ? post.slug : null));
+    const now = performance.now();
+    // 第一触：轻推纸船、激活同水面扩散的涟漪；短时间内再触打开旧有日记。
+    // 冬天河面结冰，不允许推船穿过冰层。
+    if (now - boatLastTap < 4800) {
+      boatLastTap = -Infinity;
+      toast('打开纸船捎来的日记');
+      hut.latestDiary().then((post) => hut.open('diary', post ? post.slug : null));
+    } else {
+      boatLastTap = now;
+      boatTapCount++;
+      if (state.season === 'winter') {
+        toast('河面结冰了，纸船在等春天。再点一次看纸船日记');
+      } else {
+        boatPush = 3.2;
+        boatRippleTime = 1;
+        boatRipple.visible = true;
+        boatRipple.position.set(boat.position.x, 0.5 / V + 0.027, boat.position.z);
+        toast('轻轻推了纸船一下 · 再点一次看纸船日记');
+      }
+    }
   }
 }
 let down = null;
@@ -1353,11 +1390,18 @@ function frame() {
   // 水流
   if (state.season !== 'winter') waterTex.offset.x -= dt * 0.22;
 
-  // 纸船顺水漂，冬天冻在冰面上
+  // 纸船顺水漂，触摸后有可见的瞬时加速；冬季冻结在河面上。
   if (state.season !== 'winter') {
-    boatX += dt * (state.rain ? 1.3 : 0.8);
+    boatX += dt * ((state.rain ? 1.3 : 0.8) + boatPush);
+    boatPush = Math.max(0, boatPush - dt * 1.8);
     if (boatX > BOAT_X1) boatX = BOAT_X0;
-  }
+  } else boatPush = 0;
+  if (boatRippleTime > 0) {
+    boatRippleTime = Math.max(0, boatRippleTime - dt / 1.25);
+    boatRipple.material.opacity = boatRippleTime * 0.43;
+    boatRipple.scale.setScalar(1 + (1 - boatRippleTime) * 3.3);
+    boatRipple.visible = boatRippleTime > 0 && state.season !== 'winter';
+  } else boatRipple.visible = false;
   {
     const z = riverZ(boatX), dz = riverZ(boatX + 0.5) - z;
     const bob = state.season === 'winter' ? 0 : Math.sin(time * 2.1) * (state.rain ? 0.06 : 0.03);
@@ -1587,6 +1631,8 @@ window.__natume = {
   },
   fallen: () => fallen.map((f) => [f.m.position.x, f.m.position.y, f.m.position.z, f.rest]),
   props: () => ({ mail: mailbox.position.toArray(), sign: signpost.position.toArray(), boat: boat.position.toArray() }),
+  boatQA: () => ({ tapCount: boatTapCount, impulse: boatPush,
+    ripple: boatRipple.visible, season: state.season, boatX }),
   quality: () => quality,
   modelQA: W.modelQA,
 };
