@@ -82,15 +82,26 @@ for (const touch of [true, false]) {
   assert.ok(world.courtyardShrubs.length >= 3, 'Yard requires modest low planting');
   const benchX = Math.round(world.bench.x * V), benchZ = Math.round(world.bench.z * V);
   const benchY = Math.round(world.getH(world.bench.x, world.bench.z) * V) +
-    Math.max(1, Math.round(0.48 * V));
+    Math.max(2, Math.round(0.75 * V));
+  const benchHalf = Math.max(1, Math.round(0.85 * V));
+  const benchBackZ = benchZ - Math.max(1, Math.round(0.3 * V));
+  const benchBackTop = benchY + Math.max(2, Math.round(0.7 * V));
   assert.equal(gridCell(benchX, benchY, benchZ), T.PLANK,
-    'Yard bench should be intact and off the walking route');
+    'Yard bench seat must be intact and off the walking route');
+  for (const dx of [-benchHalf, benchHalf]) {
+    assert.equal(gridCell(benchX + dx, benchY - 1, benchZ), T.LOG,
+      'Bench leg must physically support seat instead of floating');
+    assert.equal(gridCell(benchX + dx, benchBackTop, benchBackZ), T.PLANK,
+      'Bench backrest must be connected to a support');
+  }
   for (const z of [-8, -7, -6, -5]) {
     const x = HUT.doorX;
     const y = Math.round(world.getH(x, z) * V);
     assert.equal(gridCell(Math.round(x * V), y, Math.round(z * V)), T.PATH,
       'Bridge walkway disconnected at z=' + z);
   }
+  assert.equal(qa.forestGroundRootMode, 'tapered-shallow-roots',
+    'Forest trees must use ground-rooted slender trunk bases');
   const shapes = Object.fromEntries(Object.entries(qa.forestShapeCounts));
   for (const species of ['round', 'tall', 'spreading', 'pine']) {
     assert.ok(shapes[species] > 0, 'Distinct forest silhouette missing: ' + species);
