@@ -38,7 +38,26 @@ for (const touch of [true, false]) {
   assert.ok(qa.cottageRoofRise >= 1.2 && qa.cottageRoofRise <= 2.1, 'Cottage roof pitch should be human scale');
   assert.equal(qa.cottageRoofAxisError, 0, 'Opposite roof slopes must mirror');
   assert.ok(world.chimney.y > 6, 'The chimney cap must project above the pitched roof');
-  assert.ok(qa.heroCanopyDiameter >= 5 && qa.heroCanopyDiameter <= 7.5, 'Hero canopy should be proportionate');
+  assert.ok(qa.heroCanopyDiameter >= 6.9 && qa.heroCanopyDiameter <= 7.8,
+    'Hero canopy should retain the broader V3.2 shade silhouette');
+  assert.ok(qa.cottageWidth >= 6.5 && qa.cottageWidth <= 7.3,
+    'Cottage should be modestly enlarged rather than oversized');
+  assert.ok(qa.cottageDepth >= 4.25 && qa.cottageDepth <= 5,
+    'Cottage extra depth must remain proportionate');
+  assert.equal(world.yard.connectsToTree, true, 'Courtyard spur must reach the hero tree');
+  for (const x of [-8, -6, -4, -2, 0, 2, 4]) {
+    const t = (x - HUT.doorX) / (TREE.x - 1.25 - HUT.doorX);
+    const z = HUT.z1 + 1.82 + 2.24 * Math.pow(t, 0.82) + 0.16 * Math.sin(t * Math.PI);
+    const y = Math.round(world.getH(x, z) * V);
+    assert.equal(gridCell(Math.round(x * V), y, Math.round(z * V)), T.PATH,
+      'Side path is interrupted at x=' + x);
+  }
+  assert.ok(world.courtyardShrubs.length >= 3, 'Yard requires modest low planting');
+  const benchX = Math.round(world.bench.x * V), benchZ = Math.round(world.bench.z * V);
+  const benchY = Math.round(world.getH(world.bench.x, world.bench.z) * V) +
+    Math.max(1, Math.round(0.48 * V));
+  assert.equal(gridCell(benchX, benchY, benchZ), T.PLANK,
+    'Yard bench should be intact and off the walking route');
   for (const z of [-8, -7, -6, -5]) {
     const x = HUT.doorX;
     const y = Math.round(world.getH(x, z) * V);
