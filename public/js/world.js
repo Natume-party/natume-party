@@ -526,6 +526,37 @@ export function generateWorld() {
     blob(spot.xb, spot.h + th + Math.round(rr * 0.5), spot.zb, rr, Math.round(rr * 0.9), rr, T.TLEAF, 0.26);
   }
 
+  // 院落生活层：只在支路两侧放少量矮植和一张坐凳，不再用大树填满主景留白。
+  // 布局固定，避免刷新后随机堆到道路、门口或枣树根部。
+  const courtyardShrubs = [];
+  for (const [x, z, scale] of [
+    [-4.2, -3.7, 0.62], [-1.1, -8.6, 0.52], [2.2, -7.8, 0.67], [3.1, -1.8, 0.54],
+  ]) {
+    if (isPath(x, z) || rectDist(HUT_ZONE, x, z) < 0.65 || Math.hypot(x - TREE.x, z - TREE.z) < 2.2) continue;
+    const xb = Math.round(x * V), zb = Math.round(z * V), h = getH(xb, zb);
+    if (h < 0 || grid.get(xb, h, zb) !== T.GRASS) continue;
+    const rr = Math.max(1, Math.round(scale * V));
+    const added = blob(xb, h + Math.max(1, Math.round(rr * 0.58)), zb,
+      rr, Math.max(1, Math.round(rr * 0.65)), rr + (x > 2 ? 1 : 0),
+      x < 0 ? T.LEAF_B : T.LEAF_A, 0.13);
+    if (added.length) courtyardShrubs.push({ x, z });
+  }
+  // 小坐凳放在枣树方向小径外侧；尺寸控制在约 1.8 世界单位，无需新增贴图/纹理资源。
+  const bench = { x: 0.8, z: -2.85 };
+  const benchX = Math.round(bench.x * V), benchZ = Math.round(bench.z * V);
+  const benchH = getH(benchX, benchZ);
+  if (benchH >= 0 && !isPath(bench.x, bench.z) && grid.get(benchX, benchH, benchZ) === T.GRASS) {
+    const halfSeat = Math.max(1, Math.round(0.85 * V));
+    const seatY = benchH + Math.max(1, Math.round(0.48 * V));
+    for (let dx = -halfSeat; dx <= halfSeat; dx++) grid.set(benchX + dx, seatY, benchZ, T.PLANK);
+    for (const dx of [-halfSeat, halfSeat]) {
+      for (let y = benchH + 1; y < seatY; y++) grid.set(benchX + dx, y, benchZ, T.LOG);
+    }
+    for (let dx = -halfSeat; dx <= halfSeat; dx++) {
+      grid.set(benchX + dx, seatY + Math.max(1, Math.round(0.5 * V)), benchZ - Math.max(1, Math.round(0.24 * V)), T.LOG);
+    }
+  }
+
   // ---- V3.1 山坡微生态：独立于河边草甸的布景规则 ----
   // 贴合真实高度场；山脊留白，山脚略密，林缘聚集，避免填满每一个坡面。
   const hillShrubs = [], hillStones = [];
@@ -911,7 +942,7 @@ export function generateWorld() {
 
   return {
     grid, getH: heightAtWorld, topAt, windows, chimney: { ...chimney, y: (chTop + 1) / V }, fruitSpots, flowerSpots, groundFlowers, reeds, bridge,
-    tufts, lilies, hillShrubs, hillStones,
+    tufts, lilies, hillShrubs, hillStones, courtyardShrubs, bench,
     windmill: hub ? { hub, ground: wmGround / V, top: wmTop / V } : null,
     door: { x: (doorX0 + doorX1) / 2 / V, z: HUT.z1, width: doorCells / V },
     yard: {
