@@ -44,7 +44,7 @@ scene.fog = new THREE.Fog(0xbfe0f5, 40, 160);
 
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.3, 1200);
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(-1, 4, -2);
+controls.target.set(-2, 4, -3.15);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.enablePan = false;
@@ -67,12 +67,14 @@ function fitCamera() {
 }
 {
   const a = innerWidth / innerHeight;
-  // V3.1 手机竖屏：默认稍微俯视、适度拉远，同时照顾小桥、小屋和枣树。
-  // 保持桌面原取景，不改变用户旋转/缩放后的 OrbitControls 操作。
+  // V3.2 的入口镜头以小屋、枣树为双核心：手机视角稍收紧，
+  // 对准两者中间偏后的庭院，背景林木仅构成边框而非占据前景。
+  // ?framing=classic 可对照上一版手机取景，桌面原视角不变。
   const portraitTouch = isTouch && a < 0.8;
-  if (portraitTouch) controls.target.set(-2, 3, -2);
-  const dist = portraitTouch ? 44 : a < 0.8 ? 37 : 33;
-  const az = 0.62, pol = portraitTouch ? 1.18 : 1.34;
+  const heroFrame = portraitTouch && params.get('framing') !== 'classic';
+  if (portraitTouch) controls.target.set(heroFrame ? -2.1 : -2, 3, heroFrame ? -4.3 : -2);
+  const dist = portraitTouch ? (heroFrame ? 41.5 : 44) : a < 0.8 ? 37 : 33;
+  const az = heroFrame ? 0.59 : 0.62, pol = portraitTouch ? 1.18 : 1.34;
   camera.position.set(
     controls.target.x + dist * Math.sin(pol) * Math.sin(az),
     controls.target.y + dist * Math.cos(pol),
@@ -225,33 +227,56 @@ const windowTex = (() => {
 })();
 const windowMat = new THREE.MeshBasicMaterial({ map: windowTex, color: 0xa8d4e6 });
 for (const w of W.windows) {
-  const geo = w.axis === 'z' ? new THREE.BoxGeometry(1, 1, 0.14) : new THREE.BoxGeometry(0.14, 1, 1);
+  const ws = W.windowWidth;
+  const geo = w.axis === 'z' ? new THREE.BoxGeometry(ws, ws, 0.14) : new THREE.BoxGeometry(0.14, ws, ws);
   const m = new THREE.Mesh(geo, windowMat);
   m.position.set(w.x, w.y, w.z);
   scene.add(m);
+  // V3.2 四扇窗共用同尺寸的立体木框；前墙左右两窗镜像一致。
+  const frameMat = new THREE.MeshLambertMaterial({ color: 0x69523b });
+  const face = w.axis === 'z';
+  const thickness = 0.105, depth = 0.18, he = ws / 2;
+  const frame = new THREE.Group();
+  frame.position.set(w.x, w.y, w.z);
+  for(const edge of [-he,he]){
+    const vertical = new THREE.Mesh(
+      new THREE.BoxGeometry(face?thickness:depth, ws + 0.12, face?depth:thickness), frameMat);
+    if(face)vertical.position.x=edge;
+    else vertical.position.z=edge;
+    frame.add(vertical);
+    const horizontal = new THREE.Mesh(
+      new THREE.BoxGeometry(face?ws + 0.12:depth, thickness, face?depth:ws + 0.12), frameMat);
+    horizontal.position.y=edge;
+    frame.add(horizontal);
+  }
+  scene.add(frame);
 }
 
 const plankTex = tileTexture(TILE_ID.PLANK);
 const doorPivot = new THREE.Group();
-doorPivot.position.set(W.door.x - 0.5, 1.5, W.door.z + 0.1);
-const door = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 0.16), new THREE.MeshLambertMaterial({ map: plankTex, color: 0x9a6a40 }));
-door.position.x = 0.5;
+doorPivot.position.set(W.door.x - W.door.width / 2, 1.5, W.door.z + 0.1);
+const door = new THREE.Mesh(new THREE.BoxGeometry(W.door.width, 2, 0.16), new THREE.MeshLambertMaterial({ map: plankTex, color: 0x9a6a40 }));
+door.position.x = W.door.width / 2;
 door.castShadow = true;
 const knob = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.12), new THREE.MeshLambertMaterial({ color: 0xe0b85a }));
-knob.position.set(0.78, -0.05, 0.12);
+knob.position.set(W.door.width * 0.33, -0.05, 0.12);
 door.add(knob);
 doorPivot.add(door);
 scene.add(doorPivot);
 
+// V3.2 门前成对壁灯：几何上镜像，门板与窗框都以入口中心线为基准。
 const lanternMat = new THREE.MeshBasicMaterial({ color: 0x8a7a5a });
-const lantern = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.44, 0.34), lanternMat);
-lantern.position.set(W.door.x - 1.2, 2.2, W.door.z + 0.72);
-const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.4), new THREE.MeshLambertMaterial({ color: 0x3a2a1a }));
-bracket.position.set(0, 0.3, -0.2);
-lantern.add(bracket);
-scene.add(lantern);
+const lanternBracketMat = new THREE.MeshLambertMaterial({ color: 0x3a2a1a });
+for(const side of [-1,1]){
+  const lantern = new THREE.Mesh(new THREE.BoxGeometry(0.30,0.39,0.30),lanternMat);
+  lantern.position.set(W.door.x + side*1.20, 2.28, W.door.z + 0.72);
+  const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.36),lanternBracketMat);
+  bracket.position.set(0,0.29,-0.19);
+  lantern.add(bracket);
+  scene.add(lantern);
+}
 const porchLight = new THREE.PointLight(0xffc46b, 0, 22, 1.6);
-porchLight.position.set(W.door.x - 0.5, 2.6, W.door.z + 2);
+porchLight.position.set(W.door.x, 2.6, W.door.z + 2);
 scene.add(porchLight);
 
 // ---------- 小桥 V3.1：紧凑木拱桥，连续扶手与两侧承重梁 ----------
@@ -345,9 +370,17 @@ if (W.windmill) {
   const { hub } = W.windmill;
   sailGroup = new THREE.Group();
   sailGroup.position.set(hub.x, hub.y, hub.z);
-  sailGroup.rotation.y = -0.5;
+  // 保留紧凑帆翼且不斜转。原 +0.25 在 V=2 会扫入前伸的茅草屋顶。
+  // 模型逐帧体素检测确认 +0.50 在 V=2/V=3 全部 36 个旋转角度无实体交叠。
+  sailGroup.position.z += 0.50;
+  sailGroup.rotation.y = 0;
+  // 本值仅为塔墙正面的保守净距；完整防穿模由 tests/model-geometry.mjs
+  // 对实际旋翼组件、茅草顶和体素实体执行 0–350° 逐角采样。
+  sailGroup.userData.clearanceToTower = 0.5 / V + 0.50 - 0.27;
   const beamMat = new THREE.MeshLambertMaterial({ color: 0x7a5c42 });
   const clothMat = new THREE.MeshLambertMaterial({ color: 0xe4d6b6 });
+  const axle = new THREE.Mesh(new THREE.BoxGeometry(0.47, 0.47, 0.54), beamMat);
+  sailGroup.add(axle);
   for (let i = 0; i < 4; i++) {
     const arm = new THREE.Group();
     arm.rotation.z = (i / 4) * Math.PI * 2;
@@ -385,7 +418,8 @@ const hitBox = (w, h, d, kind) => {
   return m;
 };
 
-const MAILBOX = { x: -11.7, z: -4.3 };
+// 信箱放在院门步道外侧，随屋前庭院一起后移，而不是留在原屋门位置。
+const MAILBOX = { x: W.yard.x - 2.35, z: W.yard.z + 0.95 };
 const mailbox = new THREE.Group();
 mailbox.position.set(MAILBOX.x, groundY(MAILBOX.x, MAILBOX.z), MAILBOX.z);
 block(0.18, 1.15, 0.18, lamb(0x6b4a2e, logTex), 0, 0.58, 0, mailbox);
@@ -439,27 +473,38 @@ const boatHit = hitBox(2.4, 1.8, 2.4, 'boat');
 boat.add(boatHit);
 scene.add(boat);
 const BOAT_X0 = -24, BOAT_X1 = 22;
-let boatX = -12;
+let boatX = -12, boatPush = 0, boatRippleTime = 0, boatLastTap = -Infinity, boatTapCount = 0;
+// 点击纸船后让水面给出即时反馈，而不是仅弹出不相关页面。
+const boatRipple = new THREE.Mesh(
+  new THREE.RingGeometry(0.28, 0.36, 24),
+  new THREE.MeshBasicMaterial({ color: 0xe3f8ef, transparent: true, opacity: 0,
+    side: THREE.DoubleSide, depthWrite: false }));
+boatRipple.rotation.x = -Math.PI / 2;
+boatRipple.renderOrder = 2;
+boatRipple.visible = false;
+scene.add(boatRipple);
 
-// ---------- 小花与芦苇 ----------
+// ---------- 小花与芦苇：植株根部统一与地面体素顶面相切 ----------
+const GROUND_Y = 0.5 / V;
 const flowerOrder = W.groundFlowers;
 const stemMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.06, 0.3, 0.06), new THREE.MeshLambertMaterial({ color: 0x4f8a32 }), flowerOrder.length);
-const petalMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.24, 0.2, 0.24), new THREE.MeshLambertMaterial(), flowerOrder.length);
+const petalMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.18, 0.14, 0.18), new THREE.MeshLambertMaterial(), flowerOrder.length);
 flowerOrder.forEach((f, i) => {
   dummy.rotation.set(0, f.v * 6, 0);
   dummy.scale.set(1, f.s, 1);
-  dummy.position.set(f.x, 0.5 + 0.15 * f.s, f.z);
+  dummy.position.set(f.x, GROUND_Y + 0.15 * f.s, f.z);
   dummy.updateMatrix();
   stemMesh.setMatrixAt(i, dummy.matrix);
   dummy.scale.setScalar(1);
-  dummy.position.set(f.x, 0.5 + 0.3 * f.s + 0.08, f.z);
+  dummy.position.set(f.x, GROUND_Y + 0.3 * f.s + 0.065, f.z);
   dummy.updateMatrix();
   petalMesh.setMatrixAt(i, dummy.matrix);
 });
+stemMesh.castShadow = petalMesh.castShadow = true;
+stemMesh.receiveShadow = petalMesh.receiveShadow = true;
 scene.add(stemMesh, petalMesh);
 
 // ---------- V3.1 轻薄渐尖草叶：不再用厚盒状模型 ----------
-const GROUND_Y = 0.5 / V;
 const TUFT_COLORS = {
   spring: ['#83a977', '#a3be8c', '#729b7b', '#b4be84'],
   summer: ['#658c62', '#819b75', '#527d65', '#9ca779'],
@@ -503,7 +548,7 @@ tuftMesh.instanceMatrix.needsUpdate = true;
 
 const lilyMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.42, 0.04, 0.42), new THREE.MeshLambertMaterial({ color: 0x5f9440 }), Math.max(1, W.lilies.length));
 W.lilies.forEach((l, i) => {
-  dummy.position.set(l.x, 0.14, l.z);
+  dummy.position.set(l.x, GROUND_Y + 0.028, l.z);
   dummy.rotation.set(0, l.rot, 0);
   dummy.scale.set(l.s, 1, l.s);
   dummy.updateMatrix();
@@ -515,27 +560,76 @@ scene.add(lilyMesh);
 
 
 
-const reedMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.065, 1, 0.032), new THREE.MeshLambertMaterial(), W.reeds.length);
-const cattailMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.125, 0.28, 0.125), new THREE.MeshLambertMaterial({ color: 0x7a5232 }), W.reeds.length);
+// 细长尖叶采用交叉双面薄三角，不再是直立的粗长方盒。
+// 局部原点位于叶根，根部随 world.js 返回的真实体素地面高度落地。
+const reedGeo = new THREE.BufferGeometry();
+reedGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+  -0.055, 0, 0,  0.055, 0, 0,   -0.032, .42, .025,  .032, .42, .025,  0, 1, .075,
+  0, 0, -0.05,   0, 0, .05,   .026, .42, -.025,  .026, .42, .025,  .075, 1, 0,
+], 3));
+reedGeo.setIndex([0,1,2, 1,3,2, 2,3,4, 5,6,7, 6,8,7, 7,8,9]);
+reedGeo.computeVertexNormals();
+const reedMesh = new THREE.InstancedMesh(reedGeo,
+  new THREE.MeshLambertMaterial({ side: THREE.DoubleSide }), Math.max(1, W.reeds.length));
+const cattailMesh = new THREE.InstancedMesh(
+  new THREE.BoxGeometry(0.085, 0.22, 0.085),
+  new THREE.MeshLambertMaterial({ color: 0x7a5232 }), Math.max(1, W.reeds.length));
+let cattailCount = 0;
 W.reeds.forEach((r, i) => {
-  const lean = 0.1 + r.r * 0.5;
+  const lean = 0.04 + r.r * 0.32;
+  dummy.position.set(r.x, r.y, r.z);
   dummy.rotation.set(Math.sin(r.a) * lean, r.a, -Math.cos(r.a) * lean);
-  dummy.scale.set(1, r.h, 1);
-  dummy.position.set(r.x, GROUND_Y + r.h * 0.5, r.z);
+  dummy.scale.set(0.84 + 0.22 * r.v, r.h, 0.84 + 0.22 * r.v);
   dummy.updateMatrix();
   reedMesh.setMatrixAt(i, dummy.matrix);
-  // 香蒲棒：跟着倾斜方向偏出去一点，别全都笔直朝天
-  dummy.position.set(
-    r.x + Math.cos(r.a) * Math.sin(lean) * r.h * 0.9,
-    GROUND_Y + r.h * Math.cos(lean) * 0.94,
-    r.z + Math.sin(r.a) * Math.sin(lean) * r.h * 0.9,
-  );
-  dummy.updateMatrix();
-  cattailMesh.setMatrixAt(i, dummy.matrix);
+  if (r.cattail) {
+    dummy.position.set(r.x + Math.sin(r.a) * lean * r.h * 0.78,
+      r.y + r.h * 0.82, r.z - Math.cos(r.a) * lean * r.h * 0.78);
+    dummy.rotation.set(0, r.a, 0);
+    dummy.scale.set(1, 0.70 + r.v * 0.4, 1);
+    dummy.updateMatrix();
+    cattailMesh.setMatrixAt(cattailCount++, dummy.matrix);
+  }
 });
-cattailMesh.count = Math.round(W.reeds.length * 0.33);
-reedMesh.castShadow = true;
+reedMesh.count = W.reeds.length;
+cattailMesh.count = cattailCount;
+reedMesh.castShadow = cattailMesh.castShadow = true;
+reedMesh.receiveShadow = cattailMesh.receiveShadow = true;
+reedMesh.instanceMatrix.needsUpdate = cattailMesh.instanceMatrix.needsUpdate = true;
 scene.add(reedMesh, cattailMesh);
+
+// 统一小件接触阴影：即使低端设备触发动态关阴影，也保留极淡的落地关系。
+// 一批 InstancedMesh + 32px 渐隐径向纹理，避免给每棵草加真实阴影导致掉帧。
+const groundShadowCanvas = document.createElement('canvas');
+groundShadowCanvas.width = groundShadowCanvas.height = 32;
+const groundShadowCtx = groundShadowCanvas.getContext('2d');
+const groundShadowGradient = groundShadowCtx.createRadialGradient(16, 16, 1, 16, 16, 16);
+groundShadowGradient.addColorStop(0, 'rgba(23, 39, 27, 0.36)');
+groundShadowGradient.addColorStop(0.45, 'rgba(23, 39, 27, 0.20)');
+groundShadowGradient.addColorStop(1, 'rgba(23, 39, 27, 0)');
+groundShadowCtx.fillStyle = groundShadowGradient;
+groundShadowCtx.fillRect(0, 0, 32, 32);
+const groundShadowTex = new THREE.CanvasTexture(groundShadowCanvas);
+const CONTACT_MAX = flowerOrder.length + W.reeds.length + W.hillShrubs.length;
+const contactMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1),
+  new THREE.MeshBasicMaterial({ map: groundShadowTex, transparent: true,
+    depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1 }),
+  Math.max(1, CONTACT_MAX));
+contactMesh.frustumCulled = false;
+let contacts = 0;
+function contactAt(x, y, z, size) {
+  dummy.position.set(x, y, z);
+  dummy.rotation.set(-Math.PI / 2, 0, 0);
+  dummy.scale.set(size, size, 1);
+  dummy.updateMatrix();
+  contactMesh.setMatrixAt(contacts++, dummy.matrix);
+}
+flowerOrder.forEach(f => contactAt(f.x, GROUND_Y + 0.012, f.z, 0.30 + f.s * 0.10));
+W.reeds.forEach(q => contactAt(q.x, q.y + 0.032, q.z, 0.22));
+W.hillShrubs.forEach(q => contactAt(q.x, q.y + GROUND_Y + 0.012, q.z, q.size * 0.44));
+contactMesh.count = contacts;
+contactMesh.instanceMatrix.needsUpdate = true;
+scene.add(contactMesh);
 
 // ---------- V3.1 坡地独立布景：低矮灌木团和散石 ----------
 const HILL_SHRUB_COLORS = {
@@ -548,7 +642,7 @@ const HILL_N = W.hillShrubs.length;
 const hillShrubMesh = new THREE.InstancedMesh(
   new THREE.BoxGeometry(0.46, 0.27, 0.43),
   new THREE.MeshLambertMaterial(), Math.max(1, HILL_N * 2));
-hillShrubMesh.castShadow = false;
+hillShrubMesh.castShadow = true;
 hillShrubMesh.receiveShadow = true;
 hillShrubMesh.frustumCulled = false;
 W.hillShrubs.forEach((p, i) => {
@@ -579,7 +673,7 @@ W.hillStones.forEach((p, i) => {
 });
 stoneMesh.count = W.hillStones.length;
 stoneMesh.frustumCulled = false;
-stoneMesh.castShadow = false;
+stoneMesh.castShadow = true;
 stoneMesh.instanceMatrix.needsUpdate = true;
 scene.add(stoneMesh);
 
@@ -727,24 +821,33 @@ const rangeLayers = [];
   );
 }
 
-// ---------- 方块云 ----------
-const CELL = 8, CN = 60;
-const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+// ---------- 云团：大气层体素簇，避免一整片等高的棋盘状方块云 ----------
+// 维持 instancing 总预算，晴天缩小密度，阴雨保留广阔云层；不新增逐帧模型分配。
+const CELL = 7, CN = 60;
+const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
 const cloudMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), cloudMat, CN * CN);
 const cloudGroup = new THREE.Group();
 cloudGroup.add(cloudMesh);
 scene.add(cloudGroup);
 let cloudShift = 0;
 function buildClouds() {
-  const thr = state.rain ? 0.44 : 0.62;
+  const thr = state.rain ? 0.47 : 0.61;
   let n = 0;
   for (let i = 0; i < CN; i++) for (let j = 0; j < CN; j++) {
-    const v = fbm((i + cloudShift) * 0.17, j * 0.17 + 40);
-    if (v < thr) continue;
-    dummy.position.set((i - CN / 2) * CELL, 62, (j - CN / 2) * CELL);
+    const x = i + cloudShift;
+    // 两尺度云团控制整体聚散和软边，局部姿态交给廉价 hash 负责。
+    const body = fbm(x * 0.115 + 5, j * 0.115 + 37);
+    const gaps = fbm(x * 0.072 + 41, j * 0.072 - 2);
+    const v = body * 0.85 + gaps * 0.15;
+    if (v < thr || gaps <= 0.40) continue;
+    const edge = Math.min(1, (v - thr) / (1 - thr));
+    const jx = (hash3(x, 43, j) - 0.5) * CELL * 0.34;
+    const jz = (hash3(x, 57, j) - 0.5) * CELL * 0.26;
+    dummy.position.set((i - CN / 2) * CELL + jx, 61 + (body - 0.5) * 7,
+      (j - CN / 2) * CELL + jz);
     dummy.rotation.set(0, 0, 0);
-    const puff = 0.55 + ((v - thr) / (1 - thr)) * 0.9;
-    dummy.scale.set(CELL * puff, (2.2 + (v - thr) * 7) * (0.7 + puff * 0.5), CELL * puff);
+    dummy.scale.set(CELL * (0.78 + edge * 0.31), 1.6 + edge * 3.7,
+      CELL * (0.73 + edge * 0.29));
     dummy.updateMatrix();
     cloudMesh.setMatrixAt(n++, dummy.matrix);
   }
@@ -844,8 +947,13 @@ function removeFallen(f) {
 function clearFallen() { while (fallen.length) removeFallen(fallen[0]); }
 
 // ---------- 交互用的隐藏碰撞盒 ----------
-const treeHit = new THREE.Mesh(new THREE.BoxGeometry(9, 8, 8.4), hitMat);
-treeHit.position.set(TREE.x, 4.8, TREE.z);
+// 树冠精修后最高叶面可能超过旧固定碰撞盒的 y=8.8 上边界。
+// 根据世界生成器给出的实际树冠顶端动态扩高，保留原有水平点按范围。
+const treeHitBottom = -0.4;
+const treeHitTop = Math.max(10.4, W.modelQA.treeCanopyTop + 0.5);
+const treeHit = new THREE.Mesh(new THREE.BoxGeometry(9, treeHitTop - treeHitBottom, 8.4), hitMat);
+treeHit.position.set(TREE.x, (treeHitBottom + treeHitTop) / 2, TREE.z);
+W.modelQA.treeHitTopMargin = treeHitTop - W.modelQA.treeCanopyTop;
 const doorHit = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.6, 1.4), hitMat);
 doorHit.position.set(W.door.x, 1.6, W.door.z + 0.6);
 treeHit.visible = doorHit.visible = false;
@@ -1116,8 +1224,18 @@ function pickKind(cx, cy) {
   const fh = ray.intersectObjects(fallen.filter((f) => !f.collecting).map((f) => f.hit), false);
   if (fh.length) return { kind: 'fruit', f: fh[0].object.userData.fallen };
   const h = ray.intersectObjects([treeHit, doorHit, mailHit, signHit, boatHit], false);
-  if (!h.length) return null;
-  return { kind: h[0].object.userData.kind };
+  if (h.length) return { kind: h[0].object.userData.kind };
+  // 纸船模型很小、又随水流移动：手机触控需要足够大且可见的屏幕点按范围。
+  // 仅在船处于可见河段且位于相机前方时启用，不捕捉远处其它场景。
+  if (boat.scale.x >= 0.45) {
+    const r = renderer.domElement.getBoundingClientRect();
+    const n = boat.position.clone().project(camera);
+    const px = r.left + (n.x + 1) * r.width / 2;
+    const py = r.top + (1 - n.y) * r.height / 2;
+    if (n.z > -1 && n.z < 1 && Math.hypot(cx - px, cy - py) < (isTouch ? 48 : 32))
+      return { kind: 'boat' };
+  }
+  return null;
 }
 function onTap(cx, cy) {
   const p = pickKind(cx, cy);
@@ -1161,8 +1279,26 @@ function onTap(cx, cy) {
     hut.open('works');
   } else if (p.kind === 'boat') {
     audio.pop();
-    toast('纸船上写着一篇日记');
-    hut.latestDiary().then((post) => hut.open('diary', post ? post.slug : null));
+    const now = performance.now();
+    // 第一触：轻推纸船、激活同水面扩散的涟漪；短时间内再触打开旧有日记。
+    // 冬天河面结冰，不允许推船穿过冰层。
+    if (now - boatLastTap < 4800) {
+      boatLastTap = -Infinity;
+      toast('打开纸船捎来的日记');
+      hut.latestDiary().then((post) => hut.open('diary', post ? post.slug : null));
+    } else {
+      boatLastTap = now;
+      boatTapCount++;
+      if (state.season === 'winter') {
+        toast('河面结冰了，纸船在等春天。再点一次看纸船日记');
+      } else {
+        boatPush = 3.2;
+        boatRippleTime = 1;
+        boatRipple.visible = true;
+        boatRipple.position.set(boat.position.x, 0.5 / V + 0.027, boat.position.z);
+        toast('轻轻推了纸船一下 · 再点一次看纸船日记');
+      }
+    }
   }
 }
 let down = null;
@@ -1219,7 +1355,8 @@ function keepAboveGround() {
 const timer = new THREE.Timer();
 timer.connect(document);
 let time = 0, regrowTimer = 0, ambientTimer = 0, cloudOffset = 0, audioTimer = 0;
-const chim = { x: W.chimney.x, y: 9, z: W.chimney.z };
+// 炊烟必须从烟囱帽上方升起，不能沿用旧屋顶高度的硬编码 9。
+const chim = { x: W.chimney.x, y: W.chimney.y + 0.28, z: W.chimney.z };
 
 // 自动画质：帧率持续偏低时先关阴影，再降分辨率
 let quality = 2, qFrames = 0, qTime = 0, qWarm = 0;
@@ -1286,11 +1423,18 @@ function frame() {
   // 水流
   if (state.season !== 'winter') waterTex.offset.x -= dt * 0.22;
 
-  // 纸船顺水漂，冬天冻在冰面上
+  // 纸船顺水漂，触摸后有可见的瞬时加速；冬季冻结在河面上。
   if (state.season !== 'winter') {
-    boatX += dt * (state.rain ? 1.3 : 0.8);
+    boatX += dt * ((state.rain ? 1.3 : 0.8) + boatPush);
+    boatPush = Math.max(0, boatPush - dt * 1.8);
     if (boatX > BOAT_X1) boatX = BOAT_X0;
-  }
+  } else boatPush = 0;
+  if (boatRippleTime > 0) {
+    boatRippleTime = Math.max(0, boatRippleTime - dt / 1.25);
+    boatRipple.material.opacity = boatRippleTime * 0.43;
+    boatRipple.scale.setScalar(1 + (1 - boatRippleTime) * 3.3);
+    boatRipple.visible = boatRippleTime > 0 && state.season !== 'winter';
+  } else boatRipple.visible = false;
   {
     const z = riverZ(boatX), dz = riverZ(boatX + 0.5) - z;
     const bob = state.season === 'winter' ? 0 : Math.sin(time * 2.1) * (state.rain ? 0.06 : 0.03);
@@ -1520,5 +1664,31 @@ window.__natume = {
   },
   fallen: () => fallen.map((f) => [f.m.position.x, f.m.position.y, f.m.position.z, f.rest]),
   props: () => ({ mail: mailbox.position.toArray(), sign: signpost.position.toArray(), boat: boat.position.toArray() }),
+  boatQA: () => ({ tapCount: boatTapCount, impulse: boatPush,
+    ripple: boatRipple.visible, season: state.season, boatX }),
   quality: () => quality,
+  modelQA: W.modelQA,
 };
+
+// 仅在 ?qa=1 时向 DOM 暴露非敏感的几何验收数据，供云端浏览器直接读取。
+// 中心线归零还不够：必须同时确认窗洞不被框架覆盖、树冠可点按。
+if (params.get('qa') === '1') {
+  const qa = W.modelQA;
+  const checks = {
+    doorCentered: qa.doorCenterError === 0,
+    frontWindowsMirrored: qa.frontWindowMirrorError === 0,
+    sideWindowsAligned: qa.sideWindowAlignError === 0,
+    windowsUnobstructed: qa.totalWindowObstructions === 0,
+    treeCanopyTouchableAtTop: qa.treeHitTopMargin >= 0.45,
+    cottageInland: W.yard.bankDistance >= 7,
+    roofMirrored: qa.cottageRoofAxisError === 0,
+    roofProportionate: qa.cottageRoofRise >= 1.2 && qa.cottageRoofRise <= 2.1,
+    heroCanopyProportionate: qa.heroCanopyDiameter >= 5 && qa.heroCanopyDiameter <= 7.5,
+  };
+  const output = document.createElement('output');
+  output.id = 'natume-model-qa';
+  output.hidden = true;
+  output.dataset.pass = String(Object.values(checks).every(Boolean));
+  output.textContent = JSON.stringify({ checks, qa });
+  document.body.appendChild(output);
+}

@@ -26,8 +26,12 @@ export const RIVER_HALF = 2.3;
 export const riverZ = (x) => 3 + 4 * Math.sin(x * 0.11) + 2 * Math.sin(x * 0.047 + 1.3);
 
 // 房屋、枣树、小路的位置（世界单位）
-export const HUT = { x0: -12, x1: -6, z0: -11, z1: -7, doorX: -9 };
-const HUT_ZONE = { x0: -15, x1: -3, z0: -14, z1: -5 };
+// 小屋置于河流内侧的干燥台地，向远离河道的 -Z 方向后退 2 世界单位。
+// 锁定小屋主体尺寸与中轴，路径、烟囱、门窗、照明必须跟随这个锚点。
+// 保持门与院落中轴 -9 不变：两侧各延伸 0.3 单位，屋后延伸 0.5 单位。
+// 房子实际体量约 +10%，不让门口重新朝河岸挤去。
+export const HUT = { x0: -12.3, x1: -5.7, z0: -13.5, z1: -9, doorX: -9 };
+const HUT_ZONE = { x0: -15, x1: -3, z0: -16, z1: -7 };
 export const TREE = { x: 6, z: -3 };
 const TREE_ZONE = { x0: 0, x1: 12, z0: -9, z1: 2 };
 const PATH_X0 = -10, PATH_X1 = -8;
@@ -143,7 +147,47 @@ export function generateWorld() {
   // 小路范围：从屋门向南穿过小桥
   const rzDoor = riverZ(HUT.doorX);
   const pathZ1 = Math.ceil(rzDoor + RIVER_HALF) + 5;
-  const isPath = (xw, zw) => xw >= PATH_X0 && xw <= PATH_X1 && zw >= HUT.z1 + 1 && zw <= pathZ1;
+  // 主路连接桥面与门厅；支路按行走动线通往枣树树荫，避免把院子铺成广场。
+  const isPrimaryPath = (xw, zw) =>
+    xw >= PATH_X0 && xw <= PATH_X1 && zw >= HUT.z1 + 0.3 && zw <= pathZ1;
+  const yardSpur = (xw, zw) => {
+    const start = HUT.doorX, end = TREE.x - 1.25;
+    if (xw < start || xw > end) return false;
+    const t = (xw - start) / (end - start);
+    const centerZ = (HUT.z1 + 1.82) + 2.24 * Math.pow(t, 0.82) + 0.16 * Math.sin(t * Math.PI);
+    const halfWidth = 1.14 - 0.46 * t;
+    const wornEdge = 0.08 * (hash3(Math.round(xw * V), 13, Math.round(zw * V)) - 0.5);
+    return Math.abs(zw - centerZ) < halfWidth + wornEdge;
+  };
+  // 农田需有可走通路：从枣树支路向东南伸到田块西边，
+  // 不压种植垄，不穿过树根，也不把院子铺成硬地广场。
+  const farmApproach = (xw, zw) => {
+    const start = 3.8, end = FIELD.x0 - 1.05;
+    if (xw < start || xw > end) return false;
+    const t = (xw - start) / (end - start);
+    const centerZ = -4.96 - 3.04 * t - 0.13 * Math.sin(Math.PI * t);
+    return Math.abs(zw - centerZ) <= 0.62 + 0.05 * (hash3(Math.round(xw * V), 19, Math.round(zw * V)) - 0.5);
+  };
+  // 风车的步道绕屋东侧向山坡延伸，终点停在风车基础之外。
+  // 不允许从屋墙内部直穿过去，也不应当铺到风车门坎的石基座里。
+  const millWaypoints = [[-5.7, -6.5], [-3.5, -10], [-3.5, -17.5],
+    [-5.4, -22.5], [-8.0, -26.2]];
+  const windmillTrack = (xw, zw) => {
+    for (let i = 1; i < millWaypoints.length; i++) {
+      const [ax, az] = millWaypoints[i - 1], [bx, bz] = millWaypoints[i];
+      const dx = bx - ax, dz = bz - az;
+      const t = Math.max(0, Math.min(1, ((xw - ax) * dx + (zw - az) * dz) / (dx * dx + dz * dz)));
+      if ((xw - ax - t * dx) ** 2 + (zw - az - t * dz) ** 2 <= 0.55 ** 2) return true;
+    }
+    return false;
+  };
+  const isPath = (xw, zw) =>
+    isPrimaryPath(xw, zw) || yardSpur(xw, zw) || farmApproach(xw, zw) || windmillTrack(xw, zw);
+  // 留一块近门端有植被空隙的庭院，而非让河岸上的路径直接贴住屋墙。
+  const inYard = (xw, zw) => {
+    const dx = (xw - HUT.doorX) / 3.3, dz = (zw - (HUT.z1 + 1.8)) / 2.45;
+    return dx * dx + dz * dz < 1 && fbm(xw * 0.72 + 8, zw * 0.68 - 1) > 0.39;
+  };
 
   for (let xb = -RB; xb <= RB; xb++) {
     for (let zb = -RB; zb <= RB; zb++) {
@@ -176,10 +220,14 @@ export function generateWorld() {
         let t;
         if (depth === 0) {
           if (river) t = T.SAND;
-          else if (isPath(xw, zw)) t = T.PATH;
-          // 岸线用噪声推一下：等宽的一条浅色带看着像水泥路缘
-          else if (h <= 0 && rd < RIVER_HALF + 0.24 + fbm(xw * 0.75 + 2, zw * 0.75 - 6) * 0.65) {
-            t = rd < RIVER_HALF + 0.11 + fbm(xw * 1.3, zw * 1.3) * 0.25 ? T.WETSAND : T.SAND;
+          else if (isPath(xw, zw) || inYard(xw, zw)) t = T.PATH;
+          // 溪流两侧的淤沙带不应当是固定宽度的“砌边”：借助两尺度岸滩噪声
+          // 形成宽窄变化。紧邻水面的细带保持潮湿，向草甸过渡处自然变干。
+          else if (h <= 0 && rd < RIVER_HALF + 0.14 +
+            0.83 * fbm(xw * 0.38 + 2.7, zw * 0.41 - 6.4) +
+            0.22 * fbm(xw * 1.09 - 4.2, zw * 1.16 + 8)) {
+            const wetLimit = 0.12 + 0.41 * fbm(xw * 0.73 + 5, zw * 0.80 - 8);
+            t = rd - RIVER_HALF < wetLimit ? T.WETSAND : T.SAND;
           }
           else if (steep || rocky) t = T.STONE;
           else if (foot) t = T.SCREE;
@@ -380,7 +428,7 @@ export function generateWorld() {
     for (let zw = -46; zw <= 46; zw++) {
       const d = Math.hypot(xw, zw);
       // 近景留白：太靠近默认机位的树会挡住小屋
-      if (d < 23 || d > 50) continue;
+      if (d < 26 || d > 50) continue;
       // 低频噪声决定疏密：有林子和空地，而不是均匀撒点
       // 成片而不是均匀撒点：噪声高的地方长林子，低的地方留空草地
       const patch = fbm(xw * 0.062 + 12, zw * 0.062 - 7);
@@ -391,6 +439,8 @@ export function generateWorld() {
       const h = getH(xb, zb);
       if (h < 0 || h > 11 * V) continue;
       if (Math.abs(jz - riverZ(jx)) < RIVER_HALF + 2.5) continue;
+      // 双视觉主角周边留出呼吸空间，外围树林不能遮住房屋和枣树轮廓。
+      if (Math.hypot(jx + 9, jz + 9) < 19 || Math.hypot(jx - TREE.x, jz - TREE.z) < 17) continue;
       if (rectDist(HUT_ZONE, jx, jz) < 3 || rectDist(TREE_ZONE, jx, jz) < 3) continue;
       if (grid.get(xb, h, zb) !== T.GRASS) continue;
       if (sites.some((q) => Math.hypot(q.xb - xb, q.zb - zb) < 2.6 * V)) continue;
@@ -414,44 +464,76 @@ export function generateWorld() {
     forestSectorCounts[sector]++;
     if (balancedForest.length >= 32) break;
   }
+  // 按形态而不是只按半径分四种树：高挑、低展、圆冠、不规则松。
+  // 用世界位置决定形态，保证同一视角刷新后造型稳定。
+  const forestShapeCounts = { round: 0, tall: 0, spreading: 0, pine: 0 };
+  let forestGroundedCount = 0, forestPedestalViolations = 0;
   for (const site of balancedForest) {
     const { xb, zb, h } = site;
-    const kind = rng();
-    const pine = site.alt > 8 || (site.alt > 5 && kind < 0.45);
-    const slim = !pine && kind > 0.8;
-    const leaf = pine ? T.LEAF_C : kind < 0.4 ? T.LEAF_A : T.LEAF_B;
-    const sc = 0.85 + rng() * 0.45;
-    const trunkH = Math.max(2 * V, Math.round((pine ? 2.9 : 2.2) * sc * V));
+    const kind = hash3(xb, h + 17, zb);
+    const species = site.alt > 8 && kind < 0.70 ? 'pine'
+      : kind < 0.18 ? 'pine'
+      : kind < 0.43 ? 'tall'
+      : kind < 0.72 ? 'round' : 'spreading';
+    forestShapeCounts[species]++;
+    const leaf = species === 'pine' ? T.LEAF_C
+      : species === 'spreading' ? T.LEAF_B : kind < 0.48 ? T.LEAF_A : T.LEAF_B;
+    const sc = 0.83 + hash3(xb, 81, zb) * 0.43;
+    const tall = species === 'tall';
+    const trunkH = Math.max(2 * V, Math.round((tall ? 3.45 : species === 'pine' ? 3.05 : 2.3) * sc * V));
+    const bendX = Math.round((hash3(xb, 29, zb) - 0.5) * 0.7 * V);
+    const bendZ = Math.round((hash3(xb, 51, zb) - 0.5) * 0.6 * V);
+    // 主干连续生长，上下不再从高达 30% 树高的 3x3 黑方柱突然收成细杆。
     for (let y = 1; y <= trunkH; y++) {
-      const wide = y <= Math.ceil(trunkH * 0.35);
-      const n = wide ? Math.max(2, Math.round(V / 2)) : 1;
-      for (let i = 0; i < n; i++) for (let k = 0; k < n; k++) grid.set(xb + i, h + y, zb + k, T.MLOG);
+      const sx = xb + Math.round(bendX * y / trunkH);
+      const sz = zb + Math.round(bendZ * y / trunkH);
+      grid.set(sx, h + y, sz, T.MLOG);
     }
-    const top = h + trunkH;
-    if (pine) {
-      // 松：五层收窄的锥，逐层缩，别叠成一串球
-      for (let L = 0; L < 5; L++) {
-        const r = Math.max(2, (2.9 - L * 0.46) * sc * (V / 2));
-        blob(xb, top + Math.round(L * 0.7 * V), zb, r, Math.max(1, r * 0.55), r, leaf, 0.14);
+    // 保守回退：撤销四方向伸出的块状树根，只保留紧贴地面的低矮根颈。
+    // 树冠/树种/树位仍沿用早先好看的稳定版本，山坡上的细干直接扎进坡面。
+    // 桌面 V=3 仅贴地加两片不连成方柱的短木根，避免低端视角看见黑底座。
+    if (V >= 3 && !tall) {
+      const rootSides = hash3(xb, 43, zb) > 0.5 ? [[1, 0], [0, -1]] : [[-1, 0], [0, 1]];
+      for (const [dx, dz] of rootSides) {
+        const rx = xb + dx, rz = zb + dz, soil = getH(rx, rz);
+        if (soil === h && grid.get(rx, h + 1, rz) === T.AIR)
+          grid.set(rx, h + 1, rz, T.MLOG);
       }
-    } else if (slim) {
-      // 细高（杨树感）
-      const r = Math.max(2, 1.5 * sc * (V / 2));
-      blob(xb, top + Math.round(1.7 * V), zb, r, 3.0 * sc * (V / 2), r, leaf, 0.18);
+    }
+    // 真实检查每棵树中心根与土地相连，检查距地面约 2 小格处已没有方形底座。
+    if (grid.get(xb, h + 1, zb) === T.MLOG) forestGroundedCount++;
+    const pedestalY = h + Math.max(2, Math.round(0.75 * V));
+    const pedestalArms = [[1,0],[-1,0],[0,1],[0,-1]]
+      .filter(([dx,dz]) => grid.get(xb + dx, pedestalY, zb + dz) === T.MLOG).length;
+    if (pedestalArms >= 3) forestPedestalViolations++;
+    const cx = xb + bendX, cz = zb + bendZ, top = h + trunkH;
+    const S = (u) => Math.round(u * V * sc);
+    if (species === 'pine') {
+      // 不规则的针叶片层，局部轻微偏心，不再是相同等宽五层锥体。
+      for (let L = 0; L < 4; L++) {
+        const height = top + S(0.34 + L * 0.80);
+        const radius = Math.max(2, S((1.72 - L * 0.32) * (0.88 + hash3(xb, L, zb) * 0.24)));
+        const ox = L % 2 ? Math.round(V * 0.18) : 0;
+        blob(cx + ox, height, cz, radius, Math.max(2, Math.round(radius * 0.6)), Math.round(radius * 0.84), leaf, 0.16);
+      }
+    } else if (tall) {
+      // 高挑阔叶：上提长椭圆冠，留出更多裸露树干。
+      const r = Math.max(2, S(1.14));
+      blob(cx, top + S(1.35), cz, r, Math.max(3, S(2.35)), Math.round(r * 0.86), leaf, 0.18);
+      blob(cx + S(0.23), top + S(2.48), cz - S(0.18),
+        Math.max(2, Math.round(r * 0.72)), Math.max(2, S(1.03)), Math.max(2, Math.round(r * 0.8)), leaf, 0.18);
+    } else if (species === 'spreading') {
+      // 横展阔叶：有意保留左右高低落差，树冠低矮而开阔。
+      const side = hash3(xb, 38, zb) > 0.5 ? 1 : -1;
+      blob(cx, top + S(0.83), cz, Math.max(2, S(1.62)), Math.max(2, S(0.93)), Math.max(2, S(1.20)), leaf, 0.19);
+      blob(cx - S(1.24), top + S(0.48), cz + S(0.32), Math.max(2, S(1.39)), Math.max(2, S(0.78)), Math.max(2, S(1.17)), leaf, 0.20);
+      blob(cx + S(1.47), top + S(0.72 + side * 0.18), cz - S(0.24), Math.max(2, S(1.37)), Math.max(2, S(0.88)), Math.max(2, S(1.09)), leaf, 0.19);
     } else {
-      // 阔叶：冠幅要明显大于树高，才不是「棒棒糖」
-      const n = 3 + (rng() < 0.5 ? 1 : 0);
-      const baseR = (3.0 + rng() * 0.9) * sc * (V / 2);
-      for (let i = 0; i < n; i++) {
-        const a = (i / n) * Math.PI * 2 + rng() * 0.9;
-        const r = Math.max(2, baseR * (0.72 + rng() * 0.45));
-        blob(
-          xb + Math.round(Math.cos(a) * 1.15 * sc * V),
-          top + Math.round((0.9 + rng() * 1.1) * V),
-          zb + Math.round(Math.sin(a) * 1.15 * sc * V),
-          r, r * 0.7, r, leaf, 0.24,
-        );
-      }
+      // 饱满圆冠：中心球量与不等大副冠组成连续剪影，避免单块球体。
+      const r = Math.max(2, S(1.64));
+      blob(cx, top + S(1.05), cz, r, Math.max(2, S(1.43)), r, leaf, 0.17);
+      blob(cx - S(0.78), top + S(0.77), cz + S(0.42), Math.max(2, S(1.19)), Math.max(2, S(0.96)), Math.max(2, S(1.05)), leaf, 0.17);
+      blob(cx + S(0.93), top + S(0.89), cz - S(0.34), Math.max(2, S(1.16)), Math.max(2, S(0.90)), Math.max(2, S(0.98)), leaf, 0.17);
     }
   }
 
@@ -486,6 +568,50 @@ export function generateWorld() {
     blob(spot.xb, spot.h + th + Math.round(rr * 0.5), spot.zb, rr, Math.round(rr * 0.9), rr, T.TLEAF, 0.26);
   }
 
+  // 院落生活层：只在支路两侧放少量矮植和一张坐凳，不再用大树填满主景留白。
+  // 布局固定，避免刷新后随机堆到道路、门口或枣树根部。
+  const courtyardShrubs = [];
+  for (const [x, z, scale] of [
+    [-4.2, -3.7, 0.62], [-1.1, -8.6, 0.52], [2.2, -7.8, 0.67], [3.1, -1.8, 0.54],
+  ]) {
+    if (isPath(x, z) || rectDist(HUT_ZONE, x, z) < 0.65 || Math.hypot(x - TREE.x, z - TREE.z) < 2.2) continue;
+    const xb = Math.round(x * V), zb = Math.round(z * V), h = getH(xb, zb);
+    if (h < 0 || grid.get(xb, h, zb) !== T.GRASS) continue;
+    const rr = Math.max(1, Math.round(scale * V));
+    const leaf = x < 0 ? T.LEAF_B : T.LEAF_A;
+    // 两片低矮相连的自然冠团与短木质根茎，替代漂浮在草上的方形叶盒。
+    const crownY = h + Math.max(1, Math.round(rr * 0.67));
+    const added = blob(xb, crownY, zb,
+      rr, Math.max(1, Math.round(rr * 0.53)), rr + (x > 2 ? 1 : 0), leaf, 0.12);
+    blob(xb + (x > 0 ? 1 : -1), crownY, zb + 1,
+      Math.max(1, rr - 1), Math.max(1, Math.round(rr * 0.43)), rr, leaf, 0.16);
+    if (added.length) {
+      if (!grid.get(xb, h + 1, zb)) grid.set(xb, h + 1, zb, T.TLOG);
+      courtyardShrubs.push({ x, z });
+    }
+  }
+  // 小坐凳放在枣树方向小径外侧；尺寸控制在约 1.8 世界单位，无需新增贴图/纹理资源。
+  const bench = { x: 0.8, z: -2.85 };
+  const benchX = Math.round(bench.x * V), benchZ = Math.round(bench.z * V);
+  const benchH = getH(benchX, benchZ);
+  if (benchH >= 0 && !isPath(bench.x, bench.z) && grid.get(benchX, benchH, benchZ) === T.GRASS) {
+    const halfSeat = Math.max(1, Math.round(0.85 * V));
+    // 旧模型座面只有离地一格，立柱循环一次也不执行，远看就是悬浮木块。
+    const seatY = benchH + Math.max(2, Math.round(0.75 * V));
+    const backZ = benchZ - Math.max(1, Math.round(0.3 * V));
+    const backTop = seatY + Math.max(2, Math.round(0.7 * V));
+    // 两条腿分别下探至本地地形，不假定木凳两端的坡面完全等高。
+    for (const dx of [-halfSeat, halfSeat]) {
+      const legX = benchX + dx, soil = getH(legX, benchZ);
+      for (let y = soil + 1; y < seatY; y++) grid.set(legX, y, benchZ, T.LOG);
+      for (let y = seatY; y <= backTop; y++) grid.set(legX, y, backZ, T.LOG);
+    }
+    for (let dx = -halfSeat; dx <= halfSeat; dx++) {
+      grid.set(benchX + dx, seatY, benchZ, T.PLANK);
+      grid.set(benchX + dx, backTop, backZ, T.PLANK);
+    }
+  }
+
   // ---- V3.1 山坡微生态：独立于河边草甸的布景规则 ----
   // 贴合真实高度场；山脊留白，山脚略密，林缘聚集，避免填满每一个坡面。
   const hillShrubs = [], hillStones = [];
@@ -515,41 +641,52 @@ export function generateWorld() {
     }
   }
 
-  // ---- 风车：远处山脊上的地标 ----
+  // ---- 风车：山坡上有石基、可进出的塔身与真正连接的风翼 ----
   const WM = { x: -8, z: -28 };
   const wmx = Math.round(WM.x * V), wmz = Math.round(WM.z * V);
   const wmGround = getH(wmx, wmz);
   let wmTop = 0, hub = null;
+  let windmillDoorOpen = false;
   if (wmGround > 0) {
+    // 统一以世界单位确定塔身比例，避免手机版胖、桌面版细得像柱子。
+    const baseHalf = Math.max(2, Math.round(1.16 * V));
     let hMax = wmGround;
-    for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) hMax = Math.max(hMax, getH(wmx + dx, wmz + dz));
-    for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
-      for (let y = wmGround; y <= hMax; y++) grid.set(wmx + dx, y, wmz + dz, T.COBBLE);
-    }
+    for (let dx = -baseHalf; dx <= baseHalf; dx++)
+      for (let dz = -baseHalf; dz <= baseHalf; dz++)
+        hMax = Math.max(hMax, getH(wmx + dx, wmz + dz));
+    for (let dx = -baseHalf; dx <= baseHalf; dx++)
+      for (let dz = -baseHalf; dz <= baseHalf; dz++)
+        for (let y = wmGround; y <= hMax; y++) grid.set(wmx + dx, y, wmz + dz, T.COBBLE);
     const base = hMax + 1;
     const height = Math.round(5.6 * V);
+    const halfAt = (k) => Math.max(1, Math.round((1.16 - 0.20 * k / height) * V));
     for (let k = 0; k < height; k++) {
-      const t = k / height;
-      const half = Math.max(1, Math.round(2.2 * (1 - t * 0.4)));
+      const half = halfAt(k);
       for (let dx = -half; dx <= half; dx++) for (let dz = -half; dz <= half; dz++) {
         if (Math.abs(dx) === half && Math.abs(dz) === half) continue;
-        const t2 = k < 2 ? T.COBBLE : T.MUD;
-        grid.set(wmx + dx, base + k, wmz + dz, t2);
+        grid.set(wmx + dx, base + k, wmz + dz, k < Math.max(2, Math.round(.45 * V)) ? T.COBBLE : T.MUD);
       }
     }
-    // 门洞
+    // 门口面向前来的人走土路：真正凿通木门后的短通道，不是外墙贴一个黑格。
+    const doorHalf = V % 2 === 0 ? 1 : Math.floor(V / 2);
     for (let k = 0; k < 2 * V; k++) {
-      if (wmz + 2 < W) grid.set(wmx, base + k, wmz + 2, T.AIR);
+      const wallZ = wmz + halfAt(k);
+      for (let dx = -doorHalf; dx <= doorHalf; dx++)
+        for (let dz = wmz; dz <= wallZ; dz++) grid.set(wmx + dx, base + k, dz, T.AIR);
     }
-    // 茅草顶
-    for (let k = 0; k < 3; k++) {
-      const half = Math.max(0, 2 - k);
-      for (let dx = -half; dx <= half; dx++) for (let dz = -half; dz <= half; dz++) {
-        grid.set(wmx + dx, base + height + k, wmz + dz, T.THATCH);
-      }
+    windmillDoorOpen = grid.get(wmx, base + 1, wmz + halfAt(1)) === T.AIR;
+    // 轻盈的四面斜屋面依塔身比例生长，屋顶至少包住塔身顶部。
+    const roofLayers = Math.max(2, Math.round(1.25 * V));
+    const roofBase = halfAt(height - 1) + 1;
+    for (let k = 0; k < roofLayers; k++) {
+      const half = Math.max(0, Math.round(roofBase * (1 - k / roofLayers)));
+      for (let dx = -half; dx <= half; dx++)
+        for (let dz = -half; dz <= half; dz++) grid.set(wmx + dx, base + height + k, wmz + dz, T.THATCH);
     }
-    wmTop = base + height + 3;
-    hub = { x: WM.x, y: (base + Math.round(height * 0.72)) / V, z: (wmz + 3) / V };
+    wmTop = base + height + roofLayers;
+    // 叶片旋转轴安装在外侧立面之前，避免风叶嵌进泥墙里。
+    hub = { x: WM.x, y: (base + Math.round(height * 0.72)) / V,
+      z: (wmz + halfAt(Math.round(height * 0.72)) + 1) / V };
   }
 
   // ---- 茅草屋：石基座 + 半木构架 + 窗台门框 + 双坡茅草顶 ----
@@ -561,23 +698,34 @@ export function generateWorld() {
   const wy0 = fy + 1;                  // 墙底
   const wy1 = wy0 + 3 * V - 1;         // 墙顶（3 个世界单位）
   const doorB = Math.round(HUT.doorX * V);
-  const doorX0 = doorB - Math.floor((V - 1) / 2), doorX1 = doorX0 + V - 1;
+  // 偶数细分 V=2 无法用偶数个格子以整数轴线为中心：采用 3 格门洞。
+  const doorCells = V % 2 === 0 ? V + 1 : V;
+  const doorX0 = doorB - Math.floor(doorCells / 2), doorX1 = doorX0 + doorCells - 1;
   const doorY0 = wy0, doorY1 = wy0 + 2 * V - 1;
   const boxFill = (x0, x1, y0, y1, z0, z1, t) => {
     for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) grid.set(x, y, z, t);
   };
   const inRing = (x, z) => x === hx0 || x === hx1 || z === hz0 || z === hz1;
 
+  // 小屋主墙略加宽之后，门窗保留原有节奏：两扇前窗对称，两侧窗自动随深度居中。
   // 窗洞：前墙两扇、两侧各一扇，1 个单位见方
+  // 窗洞宽度取奇数体素格，保证两窗与房屋中心的镜像轴严格吻合。
+  const windowCells = V % 2 === 0 ? V + 1 : V;
+  // V=2 的三格窗若沿用旧坐标，会与门框两侧立柱各撞上一列体素。
+  // 将左窗限制在外墙角柱与门框外侧之间，右窗沿房屋中轴镜像生成。
+  const frontLeftNominal = Math.round(-10.6 * V - (windowCells - 1) / 2);
+  const frontLeft0 = Math.max(hx0 + 1, Math.min(frontLeftNominal, doorX0 - windowCells - 1));
+  const frontRight0 = hx0 + hx1 - (frontLeft0 + windowCells - 1);
+  const side0 = Math.round((hz0 + hz1 - windowCells + 1) / 2);
   const winDefs = [
-    { axis: 'z', b: Math.round(-10.6 * V), wall: hz1 },
-    { axis: 'z', b: Math.round(-7.4 * V), wall: hz1 },
-    { axis: 'x', b: Math.round(-9 * V), wall: hx0 },
-    { axis: 'x', b: Math.round(-9 * V), wall: hx1 },
+    { axis: 'z', a0: frontLeft0, wall: hz1 },
+    { axis: 'z', a0: frontRight0, wall: hz1 },
+    { axis: 'x', a0: side0, wall: hx0 },
+    { axis: 'x', a0: side0, wall: hx1 },
   ].map((w) => {
-    const a0 = w.b - Math.floor((V - 1) / 2);
     const y0 = wy0 + 2;
-    return { ...w, a0, a1: a0 + V - 1, y0, y1: y0 + V - 1, dir: (w.axis === 'z' ? w.wall === hz1 : w.wall === hx1) ? 1 : -1 };
+    return { ...w, a1:w.a0 + windowCells - 1, y0, y1:y0 + windowCells - 1,
+      dir: (w.axis === 'z' ? w.wall === hz1 : w.wall === hx1) ? 1 : -1 };
   });
   const isWindowCell = (x, y, z) => winDefs.some((w) => {
     if (y < w.y0 || y > w.y1) return false;
@@ -608,7 +756,13 @@ export function generateWorld() {
   for (let z = hz0; z <= hz1; z++) { grid.set(hx0, wy1, z, T.LOG); grid.set(hx1, wy1, z, T.LOG); }
   const br = Math.min(2, V);
   for (const [x, dx] of [[hx0, 1], [hx1, -1]]) {
-    for (let k = 1; k <= br; k++) { grid.set(x + dx * k, wy1 - k, hz1, T.LOG); grid.set(x + dx * k, wy1 - k, hz0, T.LOG); }
+    for (let k = 1; k <= br; k++) {
+      const beamX = x + dx * k, beamY = wy1 - k;
+      // 小体素移动版的窗更靠近墙角，前墙斜撑若进入窗洞必须让位。
+      // 背面斜撑仍保留，门、窗与屋顶轮廓不动。
+      if (!isWindowCell(beamX, beamY, hz1)) grid.set(beamX, beamY, hz1, T.LOG);
+      grid.set(beamX, beamY, hz0, T.LOG);
+    }
   }
   for (const [z, dz] of [[hz0, 1], [hz1, -1]]) {
     for (let k = 1; k <= br; k++) { grid.set(hx0, wy1 - k, z + dz * k, T.LOG); grid.set(hx1, wy1 - k, z + dz * k, T.LOG); }
@@ -639,36 +793,64 @@ export function generateWorld() {
       : { x: w.wall / V, y: yc, z: along, axis: 'x' });
   }
 
-  // 双坡茅草顶：出挑 1 个单位，每层收 1 块
-  const ov = V;
+  // V3.2 Hero cottage：减轻原屋顶过大外挑，保持两侧严格对称。
+  // 墙身不变，屋脊与山墙全部继续共用这一个坡度几何源。
+  const ov = Math.max(1, Math.round(V * 0.67));
   const roofY = wy1 + 1;
-  const half = Math.floor((hz1 - hz0 + 1 + 2 * ov) / 2);
-  for (let k = 0; k <= half; k++) {
-    const za = hz0 - ov + k, zb = hz1 + ov - k;
-    if (za > zb) break;
-    boxFill(hx0 - ov, hx1 + ov, roofY + k, roofY + k, za, zb, T.THATCH);
+  // 屋顶从厚实阶梯填充改成真实双坡覆面：仅铺斜面，露出有承重关系的山墙。
+  // 同一 ridgeZ / pitch 同时驱动瓦面、山墙、木边框和屋脊；两侧不会再各算各的。
+  const ridgeZ = (hz0 + hz1) / 2;
+  const roofStartZ = hz0 - ov, roofEndZ = hz1 + ov;
+  const roofHalfSpan = (roofEndZ - roofStartZ) / 2;
+  const riseAt = (z) => Math.max(0, Math.round(Math.max(0, roofHalfSpan - Math.abs(z - ridgeZ)) * 0.68));
+  const roofTop = roofY + riseAt(Math.round(ridgeZ));
+  for (let z = roofStartZ; z <= roofEndZ; z++) {
+    const surfaceY = roofY + riseAt(z);
+    for (let x = hx0 - ov; x <= hx1 + ov; x++) grid.set(x, surfaceY, z, T.THATCH);
+    // 两侧外露木质坡沿；这是屋架结构，不是第二层厚厚的茅草屋顶。
+    grid.set(hx0 - ov, surfaceY - 1, z, T.LOG);
+    grid.set(hx1 + ov, surfaceY - 1, z, T.LOG);
   }
-  // 屋脊压条
+  // 前后屋檐两道连续檐口：实际覆盖住外墙，同时保持屋檐下空间通透。
   for (let x = hx0 - ov; x <= hx1 + ov; x++) {
-    for (let z = hz0 - ov + half; z <= hz1 + ov - half; z++) grid.set(x, roofY + half + 1, z, T.RIDGE);
+    grid.set(x, roofY - 1, roofStartZ, T.LOG);
+    grid.set(x, roofY - 1, roofEndZ, T.LOG);
   }
+  // 山墙内部按斜屋面升起泥墙，沿双坡布置斜向木梁，顶部是完整的木屋架。
+  for (const gx of [hx0, hx1]) {
+    for (let z = hz0; z <= hz1; z++) {
+      const capY = roofY + riseAt(z);
+      for (let y = roofY; y < capY; y++) {
+        if (!grid.get(gx, y, z)) grid.set(gx, y, z, T.MUD);
+      }
+      if (capY > roofY) grid.set(gx, capY - 1, z, T.LOG);
+    }
+    const midZ = Math.round(ridgeZ);
+    for (let y = roofY; y < roofTop; y++) {
+      if (grid.get(gx, y, midZ) === T.MUD) grid.set(gx, y, midZ, T.LOG);
+    }
+  }
+  // 屋脊单列压条：明确屋顶纵轴，不再产生平直一大块厚瓦面。
+  for (let x = hx0 - ov; x <= hx1 + ov; x++) grid.set(x, roofTop + 1, Math.round(ridgeZ), T.RIDGE);
   // 烟囱：石砌 + 帽
-  const chimney = { x: -7.5, z: -9 };
+  const chimney = { x: HUT.x1 - 1.5, z: HUT.z0 + 2 };
   const chx = Math.round(chimney.x * V), chz = Math.round(chimney.z * V);
-  const chTop = roofY + half + 4;
+  const chTop = roofTop + Math.max(2, Math.round(V * 0.85));
   for (let y = wy0 + 3; y <= chTop; y++) {
     for (let i = 0; i < 2; i++) for (let k = 0; k < 2; k++) grid.set(chx + i, y, chz + k, T.COBBLE);
   }
-  for (let i = -1; i <= 2; i++) for (let k = -1; k <= 2; k++) grid.set(chx + i, chTop + 1, chz + k, T.COBBLE);
+  // 烟囱帽由 4×4 缩为 3×3 体素；移动端避免它看起来和小屋半间房一样宽。
+  for (let i = -1; i <= 1; i++) for (let k = -1; k <= 1; k++) grid.set(chx + i, chTop + 1, chz + k, T.COBBLE);
 
   // ---- 枣树：根盘 + 三级分枝 + 分离的冠簇 + 挂果 ----
   const tb = TREE;
   const tbx = Math.round(tb.x * V), tbz = Math.round(tb.z * V);
   const W3 = (u) => Math.round(u * V);          // 世界单位 -> 方块
 
-  // 根盘：贴着地面鼓出一圈，别太夸张
-  for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
-    if (dx * dx + dz * dz > 2) continue;
+  // 主角树需要真实根基：随细分倍数增加少量向外鼓出的根趾，仍保持低矮。
+  const rootRadius = Math.max(1, Math.round(V * 0.62));
+  for (let dx = -rootRadius; dx <= rootRadius; dx++) for (let dz = -rootRadius; dz <= rootRadius; dz++) {
+    if (dx * dx + dz * dz > rootRadius * rootRadius + 0.2) continue;
     if (!grid.get(tbx + dx, 1, tbz + dz)) grid.set(tbx + dx, 1, tbz + dz, T.TLOG);
   }
   // 沿两点铺一段圆树干
@@ -689,37 +871,49 @@ export function generateWorld() {
   };
   // 半径按细分倍数折算：V=2 时同样的「块数」会粗出 1.5 倍，树干会胖成一堵墙
   const TR = V / 3;
-  // 主干：带一点倾斜
-  limb(tbx, 0, tbz, tbx + W3(0.22), W3(1.9), tbz + W3(0.08), 1.9 * TR, 1.5 * TR);
-  limb(tbx + W3(0.22), W3(1.75), tbz + W3(0.08), tbx + W3(0.42), W3(3.5), tbz + W3(0.16), 1.5 * TR, 1.15 * TR);
-  // 三条主枝
-  limb(tbx + W3(0.3), W3(2.9), tbz + W3(0.1), tbx - W3(1.4), W3(6.2), tbz + W3(0.9), 1.25 * TR, 0.8 * TR);
-  limb(tbx + W3(0.3), W3(3.1), tbz + W3(0.1), tbx + W3(1.5), W3(6.4), tbz - W3(1.0), 1.25 * TR, 0.8 * TR);
-  limb(tbx + W3(0.3), W3(3.2), tbz + W3(0.1), tbx + W3(0.2), W3(6.6), tbz + W3(1.5), 1.25 * TR, 0.8 * TR);
-  // 二级小枝
-  limb(tbx - W3(1.4), W3(6.2), tbz + W3(0.9), tbx - W3(2.4), W3(7.2), tbz + W3(1.8), 0.7 * TR, 0.5 * TR);
-  limb(tbx + W3(1.5), W3(6.4), tbz - W3(1.0), tbx + W3(2.5), W3(7.4), tbz - W3(1.8), 0.7 * TR, 0.5 * TR);
-
-  // 冠簇：五团分离的球，彼此留缝
+  // 枣树体量：根部扎实而树腰渐细，避免粗直柱支撑大云朵。
+  // 缩冠时保留 3D 主枝承重层，粗细由树根→树腰→主枝→末梢逐级递减。
+  limb(tbx, 0, tbz, tbx + W3(0.08), W3(2.1), tbz + W3(0.05), 2.12 * TR, 1.58 * TR);
+  limb(tbx + W3(0.08), W3(2.0), tbz + W3(0.05),
+    tbx + W3(0.18), W3(4.1), tbz + W3(0.08), 1.58 * TR, 1.18 * TR);
+  const crownArms = [
+    {x:-2.35,z:0.92,y:6.28}, {x:2.35,z:-0.78,y:6.38},
+    {x:-0.96,z:-2.12,y:6.48}, {x:1.13,z:2.08,y:6.52},
+    {x:0.05,z:0.1,y:7.5},
+  ];
+  for (const arm of crownArms) {
+    limb(tbx + W3(0.17), W3(3.62), tbz + W3(0.08),
+      tbx + W3(arm.x * 0.66), W3((arm.y + 3.62) / 2),
+      tbz + W3(arm.z * 0.65), 1.47 * TR, 1.03 * TR);
+    limb(tbx + W3(arm.x * 0.66), W3((arm.y + 3.62) / 2),
+      tbz + W3(arm.z * 0.65), tbx + W3(arm.x), W3(arm.y),
+      tbz + W3(arm.z), 1.03 * TR, 0.54 * TR);
+  }
+  // 横向回增有承重的中下层树冠，让枣树形成真实树荫而非顶冠大团。
+  // 六个冠团保留负空间，主枝能看见；落果/花仍随真实叶格采样。
   const clusters = [
-    { x: tbx - W3(1.9), y: W3(7.5), z: tbz + W3(1.1), r: 6 },
-    { x: tbx + W3(2.0), y: W3(7.6), z: tbz - W3(1.2), r: 6 },
-    { x: tbx + W3(0.3), y: W3(8.3), z: tbz + W3(1.5), r: 5 },
-    { x: tbx + W3(0.1), y: W3(8.5), z: tbz - W3(0.2), r: 6 },
-    { x: tbx - W3(1.2), y: W3(7.8), z: tbz - W3(1.8), r: 5 },
+    {x:0.00,z:0.00,y:7.10,rx:2.04,ry:1.36,rz:1.76},
+    {x:-2.04,z:0.73,y:6.90,rx:1.91,ry:1.23,rz:1.49},
+    {x:2.15,z:-0.67,y:6.95,rx:1.94,ry:1.21,rz:1.51},
+    {x:-0.98,z:-1.76,y:7.08,rx:1.43,ry:1.12,rz:1.46},
+    {x:0.97,z:1.78,y:7.09,rx:1.44,ry:1.09,rz:1.48},
+    {x:0.16,z:-0.08,y:8.02,rx:1.39,ry:1.07,rz:1.34},
   ];
   const leafCells = [];
-  for (const c of clusters) {
-    const R = Math.max(3, Math.round(c.r * V / 3));
-    for (let dx = -R; dx <= R; dx++) for (let dy = -R; dy <= R; dy++) for (let dz = -R; dz <= R; dz++) {
-      const e = (dx * dx + dy * dy + dz * dz) / (R * R);
-      if (e > 1) continue;
-      const x = c.x + dx, y = c.y + dy, z = c.z + dz;
-      if (grid.get(x, y, z)) continue;
-      // 边缘多挖一点，剪影才不像一个整球
-      if (e > 0.55 && hash3(x, y, z) < 0.16) continue;
-      grid.set(x, y, z, T.TLEAF);
-      leafCells.push({ x, y, z, e, cy: c.y, R });
+  for (let k=0; k<clusters.length; k++) {
+    const c=clusters[k];
+    const cx=tbx+W3(c.x), cy=W3(c.y), cz=tbz+W3(c.z);
+    const rx=Math.max(3,W3(c.rx)), ry=Math.max(3,W3(c.ry)), rz=Math.max(3,W3(c.rz));
+    for(let dx=-rx; dx<=rx; dx++) for(let dy=-ry; dy<=ry; dy++) for(let dz=-rz; dz<=rz; dz++){
+      const e=(dx/rx)**2+(dy/ry)**2+(dz/rz)**2;
+      // 控制体积明暗起伏，但只在轮廓附近扣边，不要挖穿树冠。
+      const rough=0.075*(hash3(cx+dx*2,cy+dy*3,cz+dz*2)-0.5);
+      if(e>1-rough)continue;
+      const x=cx+dx,y=cy+dy,z=cz+dz;
+      if(grid.get(x,y,z))continue;
+      if(e>0.65 && hash3(x,y,z)<0.14)continue;
+      grid.set(x,y,z,T.TLEAF);
+      leafCells.push({x,y,z,e,cy,R:Math.max(rx,rz)});
     }
   }
   const pickCells = (arr, n) => {
@@ -745,37 +939,52 @@ export function generateWorld() {
     x: c.x / V, y: (c.y - 0.4) / V, z: c.z / V, v: hash3(c.x, c.y, c.z),
   }));
 
-  // ---- 草地上的小花、河边芦苇 ----
+  // ---- 草甸野花与水岸芦苇：按生境群落生长，而非在视野内均匀撒彩色点 ----
   const groundFlowers = [];
-  for (let i = 0; i < 700 && groundFlowers.length < 78; i++) {
-    const x = (rng() * 2 - 1) * 20, z = (rng() * 2 - 1) * 20;
+  const wildflowerPatches = [
+    [-17.5, -7.5, 2.9], [-13.8, -3.1, 2.1], [-3.8, -1.8, 2.5],
+    [0.1, -9.7, 2.5], [5.4, -10.4, 2.2], [12.6, -11.4, 2.5],
+    [12.1, 0.3, 2.4], [1.4, 0.0, 2.1],
+  ];
+  // 小群落之间保留草地和常走的路：彩色花朵不能占据门、道路、农田或树根。
+  for (let i = 0; i < 1500 && groundFlowers.length < 74; i++) {
+    const patch = wildflowerPatches[Math.floor(rng() * wildflowerPatches.length)];
+    const a = rng() * Math.PI * 2, d = Math.sqrt(rng()) * patch[2];
+    const x = patch[0] + Math.cos(a) * d, z = patch[1] + Math.sin(a) * d;
     const xb = Math.round(x * V), zb = Math.round(z * V);
-    if (Math.hypot(x, z) > 20) continue;
-    // 成片开花：有花丛也有空草地
-    if (fbm(x * 0.16 + 4, z * 0.16 - 9) < 0.46) continue;
     if (getH(xb, zb) !== 0 || grid.get(xb, 0, zb) !== T.GRASS || grid.get(xb, 1, zb)) continue;
-    if (Math.abs(z - riverZ(x)) < RIVER_HALF + 1.6) continue;
-    if (Math.hypot(x - tb.x, z - tb.z) < 2) continue;
-    groundFlowers.push({ x, z, c: rng(), s: 0.7 + rng() * 0.5, v: rng() });
+    if (isPath(x, z) || inYard(x, z)) continue;
+    if (rectDist(HUT_ZONE, x, z) < 0.9 || rectDist(FIELD_ZONE, x, z) < 0.75) continue;
+    if (Math.abs(z - riverZ(x)) < RIVER_HALF + 1.35) continue;
+    if (Math.hypot(x - TREE.x, z - TREE.z) < 2.35) continue;
+    // 群落内部有疏有密，外围逐渐变稀，减少等密度撒点的人工感。
+    if (d > patch[2] * 0.76 && rng() > 0.42) continue;
+    groundFlowers.push({ x, z, c: rng(), s: 0.65 + rng() * 0.52, v: rng() });
   }
-  // 芦苇：成丛长，不要沿河一根一根排成栅栏
+  // 湿地芦苇：沿真实岸线低密度成丛生长，每一根重新查根部网格与水陆高度。
+  // 远离桥头和通道，短矮的叶片不会像旧版直立粗针/香蒲栅栏。
   const reeds = [];
-  for (let x = -25; x <= 25; x += 1.2 + rng() * 3.4) {
+  let reedFloatingCount = 0;
+  for (let x = -25; x <= 25; x += 1.8 + rng() * 2.8) {
     for (const side of [-1, 1]) {
-      if (rng() > 0.58) continue;
-      if (x >= PATH_X0 - 3 && x <= PATH_X1 + 3) continue;
-      const bx = x + (rng() - 0.5) * 0.7;
-      const bz = riverZ(bx) + side * (RIVER_HALF + 0.1 + rng() * 0.55);
-      const xb0 = Math.round(bx * V), zb0 = Math.round(bz * V);
-      const h0 = getH(xb0, zb0);
-      if (h0 !== 0 || grid.get(xb0, 1, zb0)) continue;
-      const n = 2 + Math.floor(rng() * 4);
+      if (rng() > 0.5 || (x >= PATH_X0 - 3 && x <= PATH_X1 + 3)) continue;
+      const bx = x + (rng() - 0.5) * 0.72;
+      const bz = riverZ(bx) + side * (RIVER_HALF + 0.25 + rng() * 0.42);
+      const n = 3 + Math.floor(rng() * 2);
       for (let k = 0; k < n; k++) {
-        const a = rng() * Math.PI * 2, rr = rng() * 0.5;
-        reeds.push({
-          x: bx + Math.cos(a) * rr, z: bz + Math.sin(a) * rr,
-          h: 0.32 + rng() * 0.54, v: rng(), a, r: rr,
-        });
+        const a = k * (Math.PI * 2 / n) + rng() * 0.35;
+        const rr = (0.12 + rng() * 0.32) * (k % 2 ? 1 : 0.72);
+        const px = bx + Math.cos(a) * rr, pz = bz + Math.sin(a) * rr;
+        const xi = Math.round(px * V), zi = Math.round(pz * V), h = getH(xi, zi);
+        if (h !== 0 || (grid.get(xi, 0, zi) !== T.GRASS &&
+            grid.get(xi, 0, zi) !== T.WETSAND && grid.get(xi, 0, zi) !== T.SAND)) continue;
+        if (grid.get(xi, 1, zi) || isPath(px, pz)) continue;
+        const ground = (h + 0.5) / V;
+        const height = 0.37 + rng() * 0.39;
+        const rooted = Number.isFinite(ground) && height >= 0.32;
+        if (!rooted) { reedFloatingCount++; continue; }
+        reeds.push({ x: px, z: pz, y: ground - 0.025, h: height,
+          v: rng(), a, r: rr, cattail: k === 0 && rng() < 0.62 });
       }
     }
   }
@@ -802,11 +1011,51 @@ export function generateWorld() {
   // 对外：世界坐标进，世界高度出
   const heightAtWorld = (xw, zw) => heightAtBlock(Math.round(xw * V), Math.round(zw * V)) / V;
 
+  // 在所有墙、构架、山墙生成之后验证窗洞，捕获中心线检查无法发现的占格重叠。
+  const windowObstructions = winDefs.map((w) => {
+    let blocked = 0;
+    for (let a = w.a0; a <= w.a1; a++) for (let y = w.y0; y <= w.y1; y++) {
+      const t = w.axis === 'z' ? grid.get(a, y, w.wall) : grid.get(w.wall, y, a);
+      if (t !== T.AIR) blocked++;
+    }
+    return blocked;
+  });
+
   return {
-    grid, getH: heightAtWorld, topAt, windows, chimney, fruitSpots, flowerSpots, groundFlowers, reeds, bridge,
-    tufts, lilies, hillShrubs, hillStones,
+    grid, getH: heightAtWorld, topAt, windows, chimney: { ...chimney, y: (chTop + 1) / V }, fruitSpots, flowerSpots, groundFlowers, reeds, bridge,
+    tufts, lilies, hillShrubs, hillStones, courtyardShrubs, bench,
     windmill: hub ? { hub, ground: wmGround / V, top: wmTop / V } : null,
-    door: { x: (doorX0 + doorX1) / 2 / V, z: HUT.z1 },
+    door: { x: (doorX0 + doorX1) / 2 / V, z: HUT.z1, width: doorCells / V },
+    yard: {
+      x: HUT.doorX, z: HUT.z1 + 1.8, pathStartZ: HUT.z1 + 0.3,
+      bankDistance: Math.abs(HUT.z1 - riverZ(HUT.doorX)) - RIVER_HALF,
+      spurEnd: { x: TREE.x - 1.25, z: (HUT.z1 + 1.82) + 2.24 },
+      connectsToTree: isPath(TREE.x - 1.25, (HUT.z1 + 1.82) + 2.24),
+      farmApproach: { x: FIELD.x0 - 1.05, z: -8.0 },
+      windmillApproach: { x: -8.0, z: -26.2 },
+    },
+    windowWidth: windowCells / V,
+    modelQA: {
+      doorCenterError: Math.abs((doorX0 + doorX1) / 2 / V - HUT.doorX),
+      frontWindowMirrorError: Math.abs((windows[0].x + windows[1].x) / 2 - HUT.doorX),
+      sideWindowAlignError: Math.abs(windows[2].z - windows[3].z),
+      windowObstructions,
+      totalWindowObstructions: windowObstructions.reduce((sum, n) => sum + n, 0),
+      treeCanopyTop: Math.max(...leafCells.map((cell) => cell.y)) / V,
+      forestShapeCounts,
+      forestGroundRootMode: 'minimal-ground-collar',
+      reedFloatingCount,
+      forestGroundedCount,
+      forestPedestalViolations,
+      benchSeatWorldHeight: Math.max(2, Math.round(0.75 * V)) / V,
+      cottageRoofRise: riseAt(Math.round(ridgeZ)) / V,
+      cottageRoofAxisError: Math.abs(riseAt(roofStartZ) - riseAt(roofEndZ)),
+      heroCanopyDiameter: (Math.max(...leafCells.map(c => c.x)) - Math.min(...leafCells.map(c => c.x))) / V,
+      heroCanopyDepth: (Math.max(...leafCells.map(c => c.z)) - Math.min(...leafCells.map(c => c.z))) / V,
+      cottageWidth: (hx1 - hx0) / V,
+      cottageDepth: (hz1 - hz0) / V,
+      windmillDoorOpen,
+    },
   };
 }
 
