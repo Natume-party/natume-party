@@ -759,11 +759,11 @@ export function generateWorld() {
   };
   // 半径按细分倍数折算：V=2 时同样的「块数」会粗出 1.5 倍，树干会胖成一堵墙
   const TR = V / 3;
-  // V3.2 Hero jujube：主干半径 +约 23%，形成有承重感的树腰与稳定根盘。
-  // 仍保留向右小幅自然生长，不镜像树皮及枝条末端。
-  limb(tbx, 0, tbz, tbx + W3(0.08), W3(2.1), tbz + W3(0.05), 2.34 * TR, 1.75 * TR);
+  // 枣树体量：根部扎实而树腰渐细，避免粗直柱支撑大云朵。
+  // 缩冠时保留 3D 主枝承重层，粗细由树根→树腰→主枝→末梢逐级递减。
+  limb(tbx, 0, tbz, tbx + W3(0.08), W3(2.1), tbz + W3(0.05), 2.12 * TR, 1.58 * TR);
   limb(tbx + W3(0.08), W3(2.0), tbz + W3(0.05),
-    tbx + W3(0.18), W3(4.1), tbz + W3(0.08), 1.75 * TR, 1.30 * TR);
+    tbx + W3(0.18), W3(4.1), tbz + W3(0.08), 1.58 * TR, 1.18 * TR);
   const crownArms = [
     {x:-2.35,z:0.92,y:6.28}, {x:2.35,z:-0.78,y:6.38},
     {x:-0.96,z:-2.12,y:6.48}, {x:1.13,z:2.08,y:6.52},
@@ -777,17 +777,16 @@ export function generateWorld() {
       tbz + W3(arm.z * 0.65), tbx + W3(arm.x), W3(arm.y),
       tbz + W3(arm.z), 1.03 * TR, 0.54 * TR);
   }
-  // 主枝伸至不同冠团内：稳定中央承重层与外部冠团间留少量枝条可见。
-  // 非完全球形的冠簇：中央宽冠 + 左右横展 + 前后分层 + 高处错落双顶。
-  // 果实与花依然从最终 leafCells 中抽取，互动逻辑不变。
+  // 围绕真实主枝重构六片冠：中间低厚、左右舒展、前后错开，顶冠不再双球堆积。
+  // 冠幅/厚度整体较旧模型缩约 15~20%，保留底缘可见的主枝与少量自然缺口。
+  // 果实和枣花继续从真实叶格取样，摇树与落果逻辑不用另写一套。
   const clusters = [
-    {x:0.0,z:0.0,y:7.70,rx:2.06,ry:1.65,rz:1.85},
-    {x:-2.10,z:0.85,y:7.14,rx:1.92,ry:1.36,rz:1.68},
-    {x:2.17,z:-0.74,y:7.22,rx:1.90,ry:1.41,rz:1.70},
-    {x:-1.14,z:-1.91,y:7.52,rx:1.65,ry:1.38,rz:1.62},
-    {x:1.04,z:1.94,y:7.48,rx:1.67,ry:1.37,rz:1.64},
-    {x:-0.90,z:0.45,y:8.52,rx:1.43,ry:1.09,rz:1.38},
-    {x:1.03,z:-0.39,y:8.61,rx:1.42,ry:1.12,rz:1.40},
+    {x:0.00,z:0.00,y:7.12,rx:1.76,ry:1.33,rz:1.59},
+    {x:-1.84,z:0.73,y:6.91,rx:1.52,ry:1.17,rz:1.38},
+    {x:1.97,z:-0.67,y:6.95,rx:1.50,ry:1.14,rz:1.39},
+    {x:-0.98,z:-1.76,y:7.08,rx:1.30,ry:1.10,rz:1.34},
+    {x:0.97,z:1.79,y:7.09,rx:1.31,ry:1.07,rz:1.35},
+    {x:0.18,z:-0.08,y:8.04,rx:1.36,ry:1.06,rz:1.30},
   ];
   const leafCells = [];
   for (let k=0; k<clusters.length; k++) {
@@ -801,7 +800,7 @@ export function generateWorld() {
       if(e>1-rough)continue;
       const x=cx+dx,y=cy+dy,z=cz+dz;
       if(grid.get(x,y,z))continue;
-      if(e>0.69 && hash3(x,y,z)<0.11)continue;
+      if(e>0.65 && hash3(x,y,z)<0.14)continue;
       grid.set(x,y,z,T.TLEAF);
       leafCells.push({x,y,z,e,cy,R:Math.max(rx,rz)});
     }
@@ -913,6 +912,8 @@ export function generateWorld() {
       forestShapeCounts,
       cottageRoofRise: riseAt(Math.round(ridgeZ)) / V,
       cottageRoofAxisError: Math.abs(riseAt(roofStartZ) - riseAt(roofEndZ)),
+      heroCanopyDiameter: (Math.max(...leafCells.map(c => c.x)) - Math.min(...leafCells.map(c => c.x))) / V,
+      heroCanopyDepth: (Math.max(...leafCells.map(c => c.z)) - Math.min(...leafCells.map(c => c.z))) / V,
     },
   };
 }
