@@ -574,10 +574,17 @@ export function generateWorld() {
     const xb = Math.round(x * V), zb = Math.round(z * V), h = getH(xb, zb);
     if (h < 0 || grid.get(xb, h, zb) !== T.GRASS) continue;
     const rr = Math.max(1, Math.round(scale * V));
-    const added = blob(xb, h + Math.max(1, Math.round(rr * 0.58)), zb,
-      rr, Math.max(1, Math.round(rr * 0.65)), rr + (x > 2 ? 1 : 0),
-      x < 0 ? T.LEAF_B : T.LEAF_A, 0.13);
-    if (added.length) courtyardShrubs.push({ x, z });
+    const leaf = x < 0 ? T.LEAF_B : T.LEAF_A;
+    // 两片低矮相连的自然冠团与短木质根茎，替代漂浮在草上的方形叶盒。
+    const crownY = h + Math.max(1, Math.round(rr * 0.67));
+    const added = blob(xb, crownY, zb,
+      rr, Math.max(1, Math.round(rr * 0.53)), rr + (x > 2 ? 1 : 0), leaf, 0.12);
+    blob(xb + (x > 0 ? 1 : -1), crownY, zb + 1,
+      Math.max(1, rr - 1), Math.max(1, Math.round(rr * 0.43)), rr, leaf, 0.16);
+    if (added.length) {
+      if (!grid.get(xb, h + 1, zb)) grid.set(xb, h + 1, zb, T.TLOG);
+      courtyardShrubs.push({ x, z });
+    }
   }
   // 小坐凳放在枣树方向小径外侧；尺寸控制在约 1.8 世界单位，无需新增贴图/纹理资源。
   const bench = { x: 0.8, z: -2.85 };
@@ -585,13 +592,19 @@ export function generateWorld() {
   const benchH = getH(benchX, benchZ);
   if (benchH >= 0 && !isPath(bench.x, bench.z) && grid.get(benchX, benchH, benchZ) === T.GRASS) {
     const halfSeat = Math.max(1, Math.round(0.85 * V));
-    const seatY = benchH + Math.max(1, Math.round(0.48 * V));
-    for (let dx = -halfSeat; dx <= halfSeat; dx++) grid.set(benchX + dx, seatY, benchZ, T.PLANK);
+    // 旧模型座面只有离地一格，立柱循环一次也不执行，远看就是悬浮木块。
+    const seatY = benchH + Math.max(2, Math.round(0.75 * V));
+    const backZ = benchZ - Math.max(1, Math.round(0.3 * V));
+    const backTop = seatY + Math.max(2, Math.round(0.7 * V));
+    // 两条腿分别下探至本地地形，不假定木凳两端的坡面完全等高。
     for (const dx of [-halfSeat, halfSeat]) {
-      for (let y = benchH + 1; y < seatY; y++) grid.set(benchX + dx, y, benchZ, T.LOG);
+      const legX = benchX + dx, soil = getH(legX, benchZ);
+      for (let y = soil + 1; y < seatY; y++) grid.set(legX, y, benchZ, T.LOG);
+      for (let y = seatY; y <= backTop; y++) grid.set(legX, y, backZ, T.LOG);
     }
     for (let dx = -halfSeat; dx <= halfSeat; dx++) {
-      grid.set(benchX + dx, seatY + Math.max(1, Math.round(0.5 * V)), benchZ - Math.max(1, Math.round(0.24 * V)), T.LOG);
+      grid.set(benchX + dx, seatY, benchZ, T.PLANK);
+      grid.set(benchX + dx, backTop, backZ, T.PLANK);
     }
   }
 
@@ -1021,6 +1034,7 @@ export function generateWorld() {
       treeCanopyTop: Math.max(...leafCells.map((cell) => cell.y)) / V,
       forestShapeCounts,
       forestGroundRootMode: 'tapered-shallow-roots',
+      benchSeatWorldHeight: Math.max(2, Math.round(0.75 * V)) / V,
       cottageRoofRise: riseAt(Math.round(ridgeZ)) / V,
       cottageRoofAxisError: Math.abs(riseAt(roofStartZ) - riseAt(roofEndZ)),
       heroCanopyDiameter: (Math.max(...leafCells.map(c => c.x)) - Math.min(...leafCells.map(c => c.x))) / V,
