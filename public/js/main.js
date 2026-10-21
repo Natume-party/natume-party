@@ -475,25 +475,27 @@ scene.add(boat);
 const BOAT_X0 = -24, BOAT_X1 = 22;
 let boatX = -12;
 
-// ---------- 小花与芦苇 ----------
+// ---------- 小花与芦苇：植株根部统一与地面体素顶面相切 ----------
+const GROUND_Y = 0.5 / V;
 const flowerOrder = W.groundFlowers;
 const stemMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.06, 0.3, 0.06), new THREE.MeshLambertMaterial({ color: 0x4f8a32 }), flowerOrder.length);
-const petalMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.24, 0.2, 0.24), new THREE.MeshLambertMaterial(), flowerOrder.length);
+const petalMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.18, 0.14, 0.18), new THREE.MeshLambertMaterial(), flowerOrder.length);
 flowerOrder.forEach((f, i) => {
   dummy.rotation.set(0, f.v * 6, 0);
   dummy.scale.set(1, f.s, 1);
-  dummy.position.set(f.x, 0.5 + 0.15 * f.s, f.z);
+  dummy.position.set(f.x, GROUND_Y + 0.15 * f.s, f.z);
   dummy.updateMatrix();
   stemMesh.setMatrixAt(i, dummy.matrix);
   dummy.scale.setScalar(1);
-  dummy.position.set(f.x, 0.5 + 0.3 * f.s + 0.08, f.z);
+  dummy.position.set(f.x, GROUND_Y + 0.3 * f.s + 0.065, f.z);
   dummy.updateMatrix();
   petalMesh.setMatrixAt(i, dummy.matrix);
 });
+stemMesh.castShadow = petalMesh.castShadow = true;
+stemMesh.receiveShadow = petalMesh.receiveShadow = true;
 scene.add(stemMesh, petalMesh);
 
 // ---------- V3.1 轻薄渐尖草叶：不再用厚盒状模型 ----------
-const GROUND_Y = 0.5 / V;
 const TUFT_COLORS = {
   spring: ['#83a977', '#a3be8c', '#729b7b', '#b4be84'],
   summer: ['#658c62', '#819b75', '#527d65', '#9ca779'],
@@ -549,26 +551,42 @@ scene.add(lilyMesh);
 
 
 
-const reedMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.065, 1, 0.032), new THREE.MeshLambertMaterial(), W.reeds.length);
-const cattailMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.125, 0.28, 0.125), new THREE.MeshLambertMaterial({ color: 0x7a5232 }), W.reeds.length);
+// 细长尖叶采用交叉双面薄三角，不再是直立的粗长方盒。
+// 局部原点位于叶根，根部随 world.js 返回的真实体素地面高度落地。
+const reedGeo = new THREE.BufferGeometry();
+reedGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+  -0.055, 0, 0,  0.055, 0, 0,   -0.032, .42, .025,  .032, .42, .025,  0, 1, .075,
+  0, 0, -0.05,   0, 0, .05,   .026, .42, -.025,  .026, .42, .025,  .075, 1, 0,
+], 3));
+reedGeo.setIndex([0,1,2, 1,3,2, 2,3,4, 5,6,7, 6,8,7, 7,8,9]);
+reedGeo.computeVertexNormals();
+const reedMesh = new THREE.InstancedMesh(reedGeo,
+  new THREE.MeshLambertMaterial({ side: THREE.DoubleSide }), Math.max(1, W.reeds.length));
+const cattailMesh = new THREE.InstancedMesh(
+  new THREE.BoxGeometry(0.085, 0.22, 0.085),
+  new THREE.MeshLambertMaterial({ color: 0x7a5232 }), Math.max(1, W.reeds.length));
+let cattailCount = 0;
 W.reeds.forEach((r, i) => {
-  const lean = 0.1 + r.r * 0.5;
+  const lean = 0.04 + r.r * 0.32;
+  dummy.position.set(r.x, r.y, r.z);
   dummy.rotation.set(Math.sin(r.a) * lean, r.a, -Math.cos(r.a) * lean);
-  dummy.scale.set(1, r.h, 1);
-  dummy.position.set(r.x, GROUND_Y + r.h * 0.5, r.z);
+  dummy.scale.set(0.84 + 0.22 * r.v, r.h, 0.84 + 0.22 * r.v);
   dummy.updateMatrix();
   reedMesh.setMatrixAt(i, dummy.matrix);
-  // 香蒲棒：跟着倾斜方向偏出去一点，别全都笔直朝天
-  dummy.position.set(
-    r.x + Math.cos(r.a) * Math.sin(lean) * r.h * 0.9,
-    GROUND_Y + r.h * Math.cos(lean) * 0.94,
-    r.z + Math.sin(r.a) * Math.sin(lean) * r.h * 0.9,
-  );
-  dummy.updateMatrix();
-  cattailMesh.setMatrixAt(i, dummy.matrix);
+  if (r.cattail) {
+    dummy.position.set(r.x + Math.sin(r.a) * lean * r.h * 0.78,
+      r.y + r.h * 0.82, r.z - Math.cos(r.a) * lean * r.h * 0.78);
+    dummy.rotation.set(0, r.a, 0);
+    dummy.scale.set(1, 0.70 + r.v * 0.4, 1);
+    dummy.updateMatrix();
+    cattailMesh.setMatrixAt(cattailCount++, dummy.matrix);
+  }
 });
-cattailMesh.count = Math.round(W.reeds.length * 0.33);
-reedMesh.castShadow = true;
+reedMesh.count = W.reeds.length;
+cattailMesh.count = cattailCount;
+reedMesh.castShadow = cattailMesh.castShadow = true;
+reedMesh.receiveShadow = cattailMesh.receiveShadow = true;
+reedMesh.instanceMatrix.needsUpdate = cattailMesh.instanceMatrix.needsUpdate = true;
 scene.add(reedMesh, cattailMesh);
 
 // ---------- V3.1 坡地独立布景：低矮灌木团和散石 ----------
@@ -582,7 +600,7 @@ const HILL_N = W.hillShrubs.length;
 const hillShrubMesh = new THREE.InstancedMesh(
   new THREE.BoxGeometry(0.46, 0.27, 0.43),
   new THREE.MeshLambertMaterial(), Math.max(1, HILL_N * 2));
-hillShrubMesh.castShadow = false;
+hillShrubMesh.castShadow = true;
 hillShrubMesh.receiveShadow = true;
 hillShrubMesh.frustumCulled = false;
 W.hillShrubs.forEach((p, i) => {
@@ -613,7 +631,7 @@ W.hillStones.forEach((p, i) => {
 });
 stoneMesh.count = W.hillStones.length;
 stoneMesh.frustumCulled = false;
-stoneMesh.castShadow = false;
+stoneMesh.castShadow = true;
 stoneMesh.instanceMatrix.needsUpdate = true;
 scene.add(stoneMesh);
 
