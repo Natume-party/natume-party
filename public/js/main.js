@@ -753,24 +753,33 @@ const rangeLayers = [];
   );
 }
 
-// ---------- 方块云 ----------
-const CELL = 8, CN = 60;
-const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+// ---------- 云团：大气层体素簇，避免一整片等高的棋盘状方块云 ----------
+// 维持 instancing 总预算，晴天缩小密度，阴雨保留广阔云层；不新增逐帧模型分配。
+const CELL = 7, CN = 60;
+const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
 const cloudMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), cloudMat, CN * CN);
 const cloudGroup = new THREE.Group();
 cloudGroup.add(cloudMesh);
 scene.add(cloudGroup);
 let cloudShift = 0;
 function buildClouds() {
-  const thr = state.rain ? 0.44 : 0.62;
+  const thr = state.rain ? 0.47 : 0.61;
   let n = 0;
   for (let i = 0; i < CN; i++) for (let j = 0; j < CN; j++) {
-    const v = fbm((i + cloudShift) * 0.17, j * 0.17 + 40);
-    if (v < thr) continue;
-    dummy.position.set((i - CN / 2) * CELL, 62, (j - CN / 2) * CELL);
+    const x = i + cloudShift;
+    // 两尺度云团控制整体聚散和软边，局部姿态交给廉价 hash 负责。
+    const body = fbm(x * 0.115 + 5, j * 0.115 + 37);
+    const gaps = fbm(x * 0.072 + 41, j * 0.072 - 2);
+    const v = body * 0.85 + gaps * 0.15;
+    if (v < thr || gaps <= 0.40) continue;
+    const edge = Math.min(1, (v - thr) / (1 - thr));
+    const jx = (hash3(x, 43, j) - 0.5) * CELL * 0.34;
+    const jz = (hash3(x, 57, j) - 0.5) * CELL * 0.26;
+    dummy.position.set((i - CN / 2) * CELL + jx, 61 + (body - 0.5) * 7,
+      (j - CN / 2) * CELL + jz);
     dummy.rotation.set(0, 0, 0);
-    const puff = 0.55 + ((v - thr) / (1 - thr)) * 0.9;
-    dummy.scale.set(CELL * puff, (2.2 + (v - thr) * 7) * (0.7 + puff * 0.5), CELL * puff);
+    dummy.scale.set(CELL * (0.78 + edge * 0.31), 1.6 + edge * 3.7,
+      CELL * (0.73 + edge * 0.29));
     dummy.updateMatrix();
     cloudMesh.setMatrixAt(n++, dummy.matrix);
   }
