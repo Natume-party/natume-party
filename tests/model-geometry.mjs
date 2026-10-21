@@ -103,6 +103,10 @@ for (const touch of [true, false]) {
   assert.equal(qa.forestGroundRootMode, 'tapered-shallow-roots',
     'Forest trees must use ground-rooted slender trunk bases');
   const shapes = Object.fromEntries(Object.entries(qa.forestShapeCounts));
+  assert.equal(qa.forestGroundedCount, Object.values(shapes).reduce((sum, n) => sum + n, 0),
+    'Every forest tree must have an actual rooted stem at ground level');
+  assert.equal(qa.forestPedestalViolations, 0,
+    'Forest must not contain raised 3x3 cuboid trunk pedestals');
   for (const species of ['round', 'tall', 'spreading', 'pine']) {
     assert.ok(shapes[species] > 0, 'Distinct forest silhouette missing: ' + species);
   }
