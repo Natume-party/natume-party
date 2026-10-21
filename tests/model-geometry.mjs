@@ -21,13 +21,30 @@ for (const touch of [true, false]) {
   runInNewContext(generator + '\nglobalThis.testWorld = { V, generateWorld, T, HUT, TREE };', scope);
   const { V, generateWorld, T, HUT, TREE } = scope.testWorld;
   assert.equal(V, touch ? 2 : 3, 'Voxel density mismatches test device');
-  const { modelQA: qa } = generateWorld();
+  const world = generateWorld();
+  const { modelQA: qa } = world;
   assert.equal(qa.doorCenterError, 0, 'Door must be centered');
   assert.equal(qa.frontWindowMirrorError, 0, 'Front windows must mirror');
   assert.equal(qa.sideWindowAlignError, 0, 'Side windows must align');
   assert.deepEqual(Array.from(qa.windowObstructions), [0, 0, 0, 0], 'Openings cannot be covered by timber');
   assert.equal(qa.totalWindowObstructions, 0, 'No window may contain an occluding voxel');
   assert.ok(Number.isFinite(qa.treeCanopyTop), 'Canopy must have a finite top');
+  // The house moved inland by 2 units; the walking route and chimney must move with it.
+  assert.equal(HUT.z1, -9, 'Cottage should stand inland of its earlier riverbank position');
+  assert.equal(world.door.z, HUT.z1, 'Door anchor must follow house front');
+  assert.equal(world.chimney.z, HUT.z0 + 2, 'Chimney must follow new roof position');
+  assert.ok(world.yard.bankDistance >= 7, 'Cottage must be sufficiently far from the river bank');
+  assert.equal(world.yard.pathStartZ, HUT.z1 + 0.3, 'Walkway must start in front of the relocated entrance');
+  assert.ok(qa.cottageRoofRise >= 1.2 && qa.cottageRoofRise <= 2.1, 'Cottage roof pitch should be human scale');
+  assert.equal(qa.cottageRoofAxisError, 0, 'Opposite roof slopes must mirror');
+  assert.ok(world.chimney.y > 6, 'The chimney cap must project above the pitched roof');
+  assert.ok(qa.heroCanopyDiameter >= 5 && qa.heroCanopyDiameter <= 7.5, 'Hero canopy should be proportionate');
+  for (const z of [-8, -7, -6, -5]) {
+    const x = HUT.doorX;
+    const y = Math.round(world.getH(x, z) * V);
+    assert.equal(gridCell(Math.round(x * V), y, Math.round(z * V)), T.PATH,
+      'Bridge walkway disconnected at z=' + z);
+  }
   const shapes = Object.fromEntries(Object.entries(qa.forestShapeCounts));
   for (const species of ['round', 'tall', 'spreading', 'pine']) {
     assert.ok(shapes[species] > 0, 'Distinct forest silhouette missing: ' + species);
