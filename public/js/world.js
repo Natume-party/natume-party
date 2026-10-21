@@ -613,41 +613,52 @@ export function generateWorld() {
     }
   }
 
-  // ---- 风车：远处山脊上的地标 ----
+  // ---- 风车：山坡上有石基、可进出的塔身与真正连接的风翼 ----
   const WM = { x: -8, z: -28 };
   const wmx = Math.round(WM.x * V), wmz = Math.round(WM.z * V);
   const wmGround = getH(wmx, wmz);
   let wmTop = 0, hub = null;
+  let windmillDoorOpen = false;
   if (wmGround > 0) {
+    // 统一以世界单位确定塔身比例，避免手机版胖、桌面版细得像柱子。
+    const baseHalf = Math.max(2, Math.round(1.16 * V));
     let hMax = wmGround;
-    for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) hMax = Math.max(hMax, getH(wmx + dx, wmz + dz));
-    for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
-      for (let y = wmGround; y <= hMax; y++) grid.set(wmx + dx, y, wmz + dz, T.COBBLE);
-    }
+    for (let dx = -baseHalf; dx <= baseHalf; dx++)
+      for (let dz = -baseHalf; dz <= baseHalf; dz++)
+        hMax = Math.max(hMax, getH(wmx + dx, wmz + dz));
+    for (let dx = -baseHalf; dx <= baseHalf; dx++)
+      for (let dz = -baseHalf; dz <= baseHalf; dz++)
+        for (let y = wmGround; y <= hMax; y++) grid.set(wmx + dx, y, wmz + dz, T.COBBLE);
     const base = hMax + 1;
     const height = Math.round(5.6 * V);
+    const halfAt = (k) => Math.max(1, Math.round((1.16 - 0.20 * k / height) * V));
     for (let k = 0; k < height; k++) {
-      const t = k / height;
-      const half = Math.max(1, Math.round(2.2 * (1 - t * 0.4)));
+      const half = halfAt(k);
       for (let dx = -half; dx <= half; dx++) for (let dz = -half; dz <= half; dz++) {
         if (Math.abs(dx) === half && Math.abs(dz) === half) continue;
-        const t2 = k < 2 ? T.COBBLE : T.MUD;
-        grid.set(wmx + dx, base + k, wmz + dz, t2);
+        grid.set(wmx + dx, base + k, wmz + dz, k < Math.max(2, Math.round(.45 * V)) ? T.COBBLE : T.MUD);
       }
     }
-    // 门洞
+    // 门口面向前来的人走土路：真正凿通木门后的短通道，不是外墙贴一个黑格。
+    const doorHalf = V % 2 === 0 ? 1 : Math.floor(V / 2);
     for (let k = 0; k < 2 * V; k++) {
-      if (wmz + 2 < W) grid.set(wmx, base + k, wmz + 2, T.AIR);
+      const wallZ = wmz + halfAt(k);
+      for (let dx = -doorHalf; dx <= doorHalf; dx++)
+        for (let dz = wmz; dz <= wallZ; dz++) grid.set(wmx + dx, base + k, dz, T.AIR);
     }
-    // 茅草顶
-    for (let k = 0; k < 3; k++) {
-      const half = Math.max(0, 2 - k);
-      for (let dx = -half; dx <= half; dx++) for (let dz = -half; dz <= half; dz++) {
-        grid.set(wmx + dx, base + height + k, wmz + dz, T.THATCH);
-      }
+    windmillDoorOpen = grid.get(wmx, base + 1, wmz + halfAt(1)) === T.AIR;
+    // 轻盈的四面斜屋面依塔身比例生长，屋顶至少包住塔身顶部。
+    const roofLayers = Math.max(2, Math.round(1.25 * V));
+    const roofBase = halfAt(height - 1) + 1;
+    for (let k = 0; k < roofLayers; k++) {
+      const half = Math.max(0, Math.round(roofBase * (1 - k / roofLayers)));
+      for (let dx = -half; dx <= half; dx++)
+        for (let dz = -half; dz <= half; dz++) grid.set(wmx + dx, base + height + k, wmz + dz, T.THATCH);
     }
-    wmTop = base + height + 3;
-    hub = { x: WM.x, y: (base + Math.round(height * 0.72)) / V, z: (wmz + 3) / V };
+    wmTop = base + height + roofLayers;
+    // 叶片旋转轴安装在外侧立面之前，避免风叶嵌进泥墙里。
+    hub = { x: WM.x, y: (base + Math.round(height * 0.72)) / V,
+      z: (wmz + halfAt(Math.round(height * 0.72)) + 1) / V };
   }
 
   // ---- 茅草屋：石基座 + 半木构架 + 窗台门框 + 双坡茅草顶 ----
@@ -1004,6 +1015,7 @@ export function generateWorld() {
       heroCanopyDepth: (Math.max(...leafCells.map(c => c.z)) - Math.min(...leafCells.map(c => c.z))) / V,
       cottageWidth: (hx1 - hx0) / V,
       cottageDepth: (hz1 - hz0) / V,
+      windmillDoorOpen,
     },
   };
 }
