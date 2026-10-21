@@ -380,7 +380,7 @@ export function generateWorld() {
     for (let zw = -46; zw <= 46; zw++) {
       const d = Math.hypot(xw, zw);
       // 近景留白：太靠近默认机位的树会挡住小屋
-      if (d < 23 || d > 50) continue;
+      if (d < 26 || d > 50) continue;
       // 低频噪声决定疏密：有林子和空地，而不是均匀撒点
       // 成片而不是均匀撒点：噪声高的地方长林子，低的地方留空草地
       const patch = fbm(xw * 0.062 + 12, zw * 0.062 - 7);
@@ -391,6 +391,8 @@ export function generateWorld() {
       const h = getH(xb, zb);
       if (h < 0 || h > 11 * V) continue;
       if (Math.abs(jz - riverZ(jx)) < RIVER_HALF + 2.5) continue;
+      // 双视觉主角周边留出呼吸空间，外围树林不能遮住房屋和枣树轮廓。
+      if (Math.hypot(jx + 9, jz + 9) < 19 || Math.hypot(jx - TREE.x, jz - TREE.z) < 17) continue;
       if (rectDist(HUT_ZONE, jx, jz) < 3 || rectDist(TREE_ZONE, jx, jz) < 3) continue;
       if (grid.get(xb, h, zb) !== T.GRASS) continue;
       if (sites.some((q) => Math.hypot(q.xb - xb, q.zb - zb) < 2.6 * V)) continue;
@@ -414,48 +416,61 @@ export function generateWorld() {
     forestSectorCounts[sector]++;
     if (balancedForest.length >= 32) break;
   }
+  // 按形态而不是只按半径分四种树：高挑、低展、圆冠、不规则松。
+  // 用世界位置决定形态，保证同一视角刷新后造型稳定。
+  const forestShapeCounts = { round: 0, tall: 0, spreading: 0, pine: 0 };
   for (const site of balancedForest) {
     const { xb, zb, h } = site;
-    const kind = rng();
-    const pine = site.alt > 8 || (site.alt > 5 && kind < 0.45);
-    const slim = !pine && kind > 0.8;
-    const leaf = pine ? T.LEAF_C : kind < 0.4 ? T.LEAF_A : T.LEAF_B;
-    const sc = 0.85 + rng() * 0.45;
-    const trunkH = Math.max(2 * V, Math.round((pine ? 2.9 : 2.2) * sc * V));
+    const kind = hash3(xb, h + 17, zb);
+    const species = site.alt > 8 && kind < 0.70 ? 'pine'
+      : kind < 0.18 ? 'pine'
+      : kind < 0.43 ? 'tall'
+      : kind < 0.72 ? 'round' : 'spreading';
+    forestShapeCounts[species]++;
+    const leaf = species === 'pine' ? T.LEAF_C
+      : species === 'spreading' ? T.LEAF_B : kind < 0.48 ? T.LEAF_A : T.LEAF_B;
+    const sc = 0.83 + hash3(xb, 81, zb) * 0.43;
+    const tall = species === 'tall';
+    const trunkH = Math.max(2 * V, Math.round((tall ? 3.45 : species === 'pine' ? 3.05 : 2.3) * sc * V));
+    const bendX = Math.round((hash3(xb, 29, zb) - 0.5) * 0.7 * V);
+    const bendZ = Math.round((hash3(xb, 51, zb) - 0.5) * 0.6 * V);
     for (let y = 1; y <= trunkH; y++) {
-      const wide = y <= Math.ceil(trunkH * 0.35);
-      // 原版粗树干从 xb/zb 往正方向增长，使主干相对树冠偏轴。
-      // 改成奇数占格、以树冠轴线为中心，PC 与触屏都不会单侧突出。
+      const wide = !tall && y <= Math.ceil(trunkH * 0.3);
       const halfWidth = wide && V >= 3 ? 1 : 0;
-      for (let dx=-halfWidth; dx<=halfWidth; dx++)
-        for (let dz=-halfWidth; dz<=halfWidth; dz++)
-          grid.set(xb+dx, h+y, zb+dz, T.MLOG);
+      const sx = xb + Math.round(bendX * y / trunkH);
+      const sz = zb + Math.round(bendZ * y / trunkH);
+      for (let dx = -halfWidth; dx <= halfWidth; dx++)
+        for (let dz = -halfWidth; dz <= halfWidth; dz++)
+          grid.set(sx + dx, h + y, sz + dz, T.MLOG);
     }
-    const top = h + trunkH;
-    if (pine) {
-      // 松：五层收窄的锥，逐层缩，别叠成一串球
-      for (let L = 0; L < 5; L++) {
-        const r = Math.max(2, (2.9 - L * 0.46) * sc * (V / 2));
-        blob(xb, top + Math.round(L * 0.7 * V), zb, r, Math.max(1, r * 0.55), r, leaf, 0.14);
+    const cx = xb + bendX, cz = zb + bendZ, top = h + trunkH;
+    const S = (u) => Math.round(u * V * sc);
+    if (species === 'pine') {
+      // 不规则的针叶片层，局部轻微偏心，不再是相同等宽五层锥体。
+      for (let L = 0; L < 4; L++) {
+        const height = top + S(0.34 + L * 0.80);
+        const radius = Math.max(2, S((1.72 - L * 0.32) * (0.88 + hash3(xb, L, zb) * 0.24)));
+        const ox = L % 2 ? Math.round(V * 0.18) : 0;
+        blob(cx + ox, height, cz, radius, Math.max(2, Math.round(radius * 0.6)), Math.round(radius * 0.84), leaf, 0.16);
       }
-    } else if (slim) {
-      // 细高（杨树感）
-      const r = Math.max(2, 1.5 * sc * (V / 2));
-      blob(xb, top + Math.round(1.7 * V), zb, r, 3.0 * sc * (V / 2), r, leaf, 0.18);
+    } else if (tall) {
+      // 高挑阔叶：上提长椭圆冠，留出更多裸露树干。
+      const r = Math.max(2, S(1.14));
+      blob(cx, top + S(1.35), cz, r, Math.max(3, S(2.35)), Math.round(r * 0.86), leaf, 0.18);
+      blob(cx + S(0.23), top + S(2.48), cz - S(0.18),
+        Math.max(2, Math.round(r * 0.72)), Math.max(2, S(1.03)), Math.max(2, Math.round(r * 0.8)), leaf, 0.18);
+    } else if (species === 'spreading') {
+      // 横展阔叶：有意保留左右高低落差，树冠低矮而开阔。
+      const side = hash3(xb, 38, zb) > 0.5 ? 1 : -1;
+      blob(cx, top + S(0.83), cz, Math.max(2, S(1.62)), Math.max(2, S(0.93)), Math.max(2, S(1.20)), leaf, 0.19);
+      blob(cx - S(1.24), top + S(0.48), cz + S(0.32), Math.max(2, S(1.39)), Math.max(2, S(0.78)), Math.max(2, S(1.17)), leaf, 0.20);
+      blob(cx + S(1.47), top + S(0.72 + side * 0.18), cz - S(0.24), Math.max(2, S(1.37)), Math.max(2, S(0.88)), Math.max(2, S(1.09)), leaf, 0.19);
     } else {
-      // 阔叶：冠幅要明显大于树高，才不是「棒棒糖」
-      const n = 3 + (rng() < 0.5 ? 1 : 0);
-      const baseR = (3.0 + rng() * 0.9) * sc * (V / 2);
-      for (let i = 0; i < n; i++) {
-        const a = (i / n) * Math.PI * 2 + rng() * 0.9;
-        const r = Math.max(2, baseR * (0.72 + rng() * 0.45));
-        blob(
-          xb + Math.round(Math.cos(a) * 1.15 * sc * V),
-          top + Math.round((0.9 + rng() * 1.1) * V),
-          zb + Math.round(Math.sin(a) * 1.15 * sc * V),
-          r, r * 0.7, r, leaf, 0.24,
-        );
-      }
+      // 饱满圆冠：中心球量与不等大副冠组成连续剪影，避免单块球体。
+      const r = Math.max(2, S(1.64));
+      blob(cx, top + S(1.05), cz, r, Math.max(2, S(1.43)), r, leaf, 0.17);
+      blob(cx - S(0.78), top + S(0.77), cz + S(0.42), Math.max(2, S(1.19)), Math.max(2, S(0.96)), Math.max(2, S(1.05)), leaf, 0.17);
+      blob(cx + S(0.93), top + S(0.89), cz - S(0.34), Math.max(2, S(1.16)), Math.max(2, S(0.90)), Math.max(2, S(0.98)), leaf, 0.17);
     }
   }
 
@@ -885,6 +900,7 @@ export function generateWorld() {
       windowObstructions,
       totalWindowObstructions: windowObstructions.reduce((sum, n) => sum + n, 0),
       treeCanopyTop: Math.max(...leafCells.map((cell) => cell.y)) / V,
+      forestShapeCounts,
     },
   };
 }
