@@ -44,7 +44,7 @@ scene.fog = new THREE.Fog(0xbfe0f5, 40, 160);
 
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.3, 1200);
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(-1, 4, -2);
+controls.target.set(-2, 4, -3.15);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.enablePan = false;
@@ -72,7 +72,7 @@ function fitCamera() {
   // ?framing=classic 可对照上一版手机取景，桌面原视角不变。
   const portraitTouch = isTouch && a < 0.8;
   const heroFrame = portraitTouch && params.get('framing') !== 'classic';
-  if (portraitTouch) controls.target.set(heroFrame ? -1.7 : -2, 3, heroFrame ? -3.6 : -2);
+  if (portraitTouch) controls.target.set(heroFrame ? -2.1 : -2, 3, heroFrame ? -4.3 : -2);
   const dist = portraitTouch ? (heroFrame ? 41.5 : 44) : a < 0.8 ? 37 : 33;
   const az = heroFrame ? 0.59 : 0.62, pol = portraitTouch ? 1.18 : 1.34;
   camera.position.set(
@@ -410,7 +410,8 @@ const hitBox = (w, h, d, kind) => {
   return m;
 };
 
-const MAILBOX = { x: -11.7, z: -4.3 };
+// 信箱放在院门步道外侧，随屋前庭院一起后移，而不是留在原屋门位置。
+const MAILBOX = { x: W.yard.x - 2.35, z: W.yard.z + 0.95 };
 const mailbox = new THREE.Group();
 mailbox.position.set(MAILBOX.x, groundY(MAILBOX.x, MAILBOX.z), MAILBOX.z);
 block(0.18, 1.15, 0.18, lamb(0x6b4a2e, logTex), 0, 0.58, 0, mailbox);
@@ -1249,7 +1250,8 @@ function keepAboveGround() {
 const timer = new THREE.Timer();
 timer.connect(document);
 let time = 0, regrowTimer = 0, ambientTimer = 0, cloudOffset = 0, audioTimer = 0;
-const chim = { x: W.chimney.x, y: 9, z: W.chimney.z };
+// 炊烟必须从烟囱帽上方升起，不能沿用旧屋顶高度的硬编码 9。
+const chim = { x: W.chimney.x, y: W.chimney.y + 0.28, z: W.chimney.z };
 
 // 自动画质：帧率持续偏低时先关阴影，再降分辨率
 let quality = 2, qFrames = 0, qTime = 0, qWarm = 0;
