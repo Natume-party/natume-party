@@ -21,6 +21,26 @@ const axleDepth = Number(sailBlock.match(/BoxGeometry\(0\.47, 0\.47, ([\d.]+)\)/
 assert.ok(Number.isFinite(forward) && Number.isFinite(axleDepth),
   'Rotor offset and axle geometry must be verifiable');
 
+// User-visible props must have both physical grounding and shadows, even with adaptive quality.
+for (const fragment of [
+  'stemMesh.castShadow = petalMesh.castShadow = true',
+  'reedMesh.castShadow = cattailMesh.castShadow = true',
+  'hillShrubMesh.castShadow = true',
+  'stoneMesh.castShadow = true',
+  'scene.add(contactMesh)',
+  'const reedGeo = new THREE.BufferGeometry()',
+]) assert.ok(mainSource.includes(fragment), 'Lost detail grounding/shadow behavior: ' + fragment);
+// Boat must give an immediate physical response before reopening the existing diary.
+for (const fragment of [
+  "p.kind === 'boat'",
+  'boatPush = 3.2',
+  'boatRippleTime = 1',
+  'boatTapCount++',
+  'boatX += dt * ((state.rain ? 1.3 : 0.8) + boatPush)',
+  "hut.latestDiary().then((post) => hut.open('diary'",
+  'boatQA: () =>',
+]) assert.ok(mainSource.includes(fragment), 'Lost paper-boat action: ' + fragment);
+
 const generator = source.slice(0, boundary)
   .replace(/^import \* as THREE from 'three';\s*/m, '')
   .replace(/\bexport (?=(const|function|class)\b)/g, '');
@@ -34,6 +54,17 @@ for (const touch of [true, false]) {
   assert.equal(V, touch ? 2 : 3, 'Voxel density mismatches test device');
   const world = generateWorld();
   const { modelQA: qa } = world;
+  // River plants must be generated from real shore cells, not arbitrary y offsets.
+  assert.equal(qa.reedFloatingCount, 0, 'No reeds may spawn above unsupported ground');
+  assert.ok(world.reeds.length >= 15, 'Keep believable natural riverbank clusters');
+  assert.ok(world.reeds.some(r => r.cattail), 'Sparse cattail heads must be present');
+  for (const reed of world.reeds) {
+    const bankTop = (Math.round(world.getH(reed.x, reed.z) * V) + 0.5) / V;
+    assert.ok(Math.abs(reed.y - (bankTop - 0.025)) < 1e-5,
+      'Reed must meet the local riverbank instead of floating');
+    assert.ok(reed.h >= 0.32 && reed.h <= 0.85,
+      'Reed should keep tapered low wetland proportions');
+  }
   assert.equal(qa.doorCenterError, 0, 'Door must be centered');
   assert.equal(qa.frontWindowMirrorError, 0, 'Front windows must mirror');
   assert.equal(qa.sideWindowAlignError, 0, 'Side windows must align');
