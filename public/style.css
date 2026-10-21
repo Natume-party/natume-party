@@ -129,7 +129,7 @@ dialog[open] { animation: pop .28s ease; }
 }
 .tabs { display: flex; gap: 6px; margin: -4px 0 14px; flex: none; }
 .tabs button {
-  flex: 1; height: 38px; border: 2px solid #6b4a2e; border-radius: 4px; background: #efe4cc; color: var(--ink);
+  flex: 1; min-width: 0; padding: 0 3px; height: 38px; border: 2px solid #6b4a2e; border-radius: 4px; background: #efe4cc; color: var(--ink);
   font-weight: 700; letter-spacing: .06em; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .12);
 }
 .tabs button[aria-selected="true"] { background: #6b4a2e; color: #fbf6ea; box-shadow: none; }
@@ -198,7 +198,7 @@ body.no-ui .hud, body.no-ui #hint, body.no-ui #toast, body.no-ui #panel-toggle {
   /* 手机上一屏只留一条底栏：面板展开时名片先退场，收起来再回来 */
   body.panel-open .identity-card { opacity: 0; visibility: hidden; pointer-events: none; }
   #hint { bottom: calc(var(--gap) + env(safe-area-inset-bottom) + 52px); font-size: 12px; }
-  .tabs button { height: 44px; letter-spacing: .02em; }
+  .tabs button { height: 44px; letter-spacing: 0; font-size: 13px; }
   .card-body { padding: 18px 16px 14px; max-height: calc(100dvh - var(--gap) * 2 - 12px); }
 }
 
