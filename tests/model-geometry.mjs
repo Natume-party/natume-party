@@ -10,6 +10,17 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const source = readFileSync(resolve(root, 'public/js/world.js'), 'utf8');
 const boundary = source.indexOf('export const ATLAS');
 assert.ok(boundary > 0, 'Cannot locate world-generation boundary');
+// Regression of the windmill rotor's entire 360° sweep relative to the tower face.
+const mainSource = readFileSync(resolve(root, 'public/js/main.js'), 'utf8');
+const sailBlock = mainSource.slice(mainSource.indexOf('let sailGroup = null;'),
+  mainSource.indexOf('// ---------- 门外的小物件'));
+assert.ok(sailBlock.includes('sailGroup.rotation.y = 0;'),
+  'Rotor must stay parallel to the tower front during the entire 360-degree sweep');
+const forward = Number(sailBlock.match(/sailGroup\.position\.z \+= ([\d.]+);/)?.[1]);
+const axleDepth = Number(sailBlock.match(/BoxGeometry\(0\.47, 0\.47, ([\d.]+)\)/)?.[1]);
+assert.ok(Number.isFinite(forward) && Number.isFinite(axleDepth),
+  'Rotor offset and axle geometry must be verifiable');
+
 const generator = source.slice(0, boundary)
   .replace(/^import \* as THREE from 'three';\s*/m, '')
   .replace(/\bexport (?=(const|function|class)\b)/g, '');
@@ -58,6 +69,12 @@ for (const touch of [true, false]) {
   }
   assert.equal(surface(FIELD.x0 + 0.7, -7), T.SOIL, 'Field must retain planted soil');
   assert.equal(qa.windmillDoorOpen, true, 'Windmill entry must be a real opening');
+  const rotorToTowerFace = 0.5 / V + forward - axleDepth / 2;
+  for (let degrees = 0; degrees < 360; degrees += 15) {
+    // z remains invariant when rotating around z with yaw 0.
+    assert.ok(rotorToTowerFace > 0.12,
+      'Windmill rotor may intersect the tower at angle ' + degrees);
+  }
   assert.ok(world.windmill && world.windmill.hub.z > -27.5,
     'Windmill blades must hang outside the front wall');
   // Both banks should transition through wet sand, dry sand and grass, not a constant paved rim.
@@ -100,7 +117,7 @@ for (const touch of [true, false]) {
     assert.equal(gridCell(Math.round(x * V), y, Math.round(z * V)), T.PATH,
       'Bridge walkway disconnected at z=' + z);
   }
-  assert.equal(qa.forestGroundRootMode, 'tapered-shallow-roots',
+  assert.equal(qa.forestGroundRootMode, 'minimal-ground-collar',
     'Forest trees must use ground-rooted slender trunk bases');
   const shapes = Object.fromEntries(Object.entries(qa.forestShapeCounts));
   assert.equal(qa.forestGroundedCount, Object.values(shapes).reduce((sum, n) => sum + n, 0),
