@@ -685,43 +685,45 @@ export function generateWorld() {
   // 墙身不变，屋脊与山墙全部继续共用这一个坡度几何源。
   const ov = Math.max(1, Math.round(V * 0.67));
   const roofY = wy1 + 1;
-  const half = Math.floor((hz1 - hz0 + 1 + 2 * ov) / 2);
-  for (let k = 0; k <= half; k++) {
-    const za = hz0 - ov + k, zb = hz1 + ov - k;
-    if (za > zb) break;
-    boxFill(hx0 - ov, hx1 + ov, roofY + k, roofY + k, za, zb, T.THATCH);
-  }
-  // 屋檐下独立一条细木檐口，让屋顶读成茅草覆盖而非一块厚实的台阶山。
-  for (let x = hx0 - ov; x <= hx1 + ov; x++) {
-    grid.set(x, roofY - 1, hz0 - ov, T.LOG);
-    grid.set(x, roofY - 1, hz1 + ov, T.LOG);
-  }
-  // V3.2 两侧山墙补齐：原来屋顶升高后，东西侧墙顶部留下三角空隙。
-  // 同一中心轴和坡度公式，用于左右两面，保持房屋承重轮廓对称。
+  // 屋顶从厚实阶梯填充改成真实双坡覆面：仅铺斜面，露出有承重关系的山墙。
+  // 同一 ridgeZ / pitch 同时驱动瓦面、山墙、木边框和屋脊；两侧不会再各算各的。
   const ridgeZ = (hz0 + hz1) / 2;
-  const roofStartZ = hz0 - ov;
-  const roofEndZ = hz1 + ov;
-  for (const gx of [hx0, hx1]) {
-    for (let z=hz0; z<=hz1; z++) {
-      const raise = Math.floor(Math.min(z-roofStartZ, roofEndZ-z));
-      for (let y=roofY; y<roofY+raise; y++) {
-        if (!grid.get(gx,y,z)) grid.set(gx,y,z,T.MUD);
-      }
-    }
-    // 山墙中轴竖向构架：两端严格同坐标，强化屋架的完整感。
-    const midZ=Math.round(ridgeZ);
-    for(let y=roofY; y<roofY+half; y++){
-      if (grid.get(gx,y,midZ)===T.MUD) grid.set(gx,y,midZ,T.LOG);
-    }
+  const roofStartZ = hz0 - ov, roofEndZ = hz1 + ov;
+  const roofHalfSpan = (roofEndZ - roofStartZ) / 2;
+  const riseAt = (z) => Math.max(0, Math.round(Math.max(0, roofHalfSpan - Math.abs(z - ridgeZ)) * 0.68));
+  const roofTop = roofY + riseAt(Math.round(ridgeZ));
+  for (let z = roofStartZ; z <= roofEndZ; z++) {
+    const surfaceY = roofY + riseAt(z);
+    for (let x = hx0 - ov; x <= hx1 + ov; x++) grid.set(x, surfaceY, z, T.THATCH);
+    // 两侧外露木质坡沿；这是屋架结构，不是第二层厚厚的茅草屋顶。
+    grid.set(hx0 - ov, surfaceY - 1, z, T.LOG);
+    grid.set(hx1 + ov, surfaceY - 1, z, T.LOG);
   }
-  // 屋脊压条
+  // 前后屋檐两道连续檐口：实际覆盖住外墙，同时保持屋檐下空间通透。
   for (let x = hx0 - ov; x <= hx1 + ov; x++) {
-    for (let z = hz0 - ov + half; z <= hz1 + ov - half; z++) grid.set(x, roofY + half + 1, z, T.RIDGE);
+    grid.set(x, roofY - 1, roofStartZ, T.LOG);
+    grid.set(x, roofY - 1, roofEndZ, T.LOG);
   }
+  // 山墙内部按斜屋面升起泥墙，沿双坡布置斜向木梁，顶部是完整的木屋架。
+  for (const gx of [hx0, hx1]) {
+    for (let z = hz0; z <= hz1; z++) {
+      const capY = roofY + riseAt(z);
+      for (let y = roofY; y < capY; y++) {
+        if (!grid.get(gx, y, z)) grid.set(gx, y, z, T.MUD);
+      }
+      if (capY > roofY) grid.set(gx, capY - 1, z, T.LOG);
+    }
+    const midZ = Math.round(ridgeZ);
+    for (let y = roofY; y < roofTop; y++) {
+      if (grid.get(gx, y, midZ) === T.MUD) grid.set(gx, y, midZ, T.LOG);
+    }
+  }
+  // 屋脊单列压条：明确屋顶纵轴，不再产生平直一大块厚瓦面。
+  for (let x = hx0 - ov; x <= hx1 + ov; x++) grid.set(x, roofTop + 1, Math.round(ridgeZ), T.RIDGE);
   // 烟囱：石砌 + 帽
   const chimney = { x: HUT.x1 - 1.5, z: HUT.z0 + 2 };
   const chx = Math.round(chimney.x * V), chz = Math.round(chimney.z * V);
-  const chTop = roofY + half + 4;
+  const chTop = roofTop + Math.max(2, Math.round(V * 0.85));
   for (let y = wy0 + 3; y <= chTop; y++) {
     for (let i = 0; i < 2; i++) for (let k = 0; k < 2; k++) grid.set(chx + i, y, chz + k, T.COBBLE);
   }
@@ -895,7 +897,7 @@ export function generateWorld() {
   });
 
   return {
-    grid, getH: heightAtWorld, topAt, windows, chimney, fruitSpots, flowerSpots, groundFlowers, reeds, bridge,
+    grid, getH: heightAtWorld, topAt, windows, chimney: { ...chimney, y: (chTop + 1) / V }, fruitSpots, flowerSpots, groundFlowers, reeds, bridge,
     tufts, lilies, hillShrubs, hillStones,
     windmill: hub ? { hub, ground: wmGround / V, top: wmTop / V } : null,
     door: { x: (doorX0 + doorX1) / 2 / V, z: HUT.z1, width: doorCells / V },
@@ -909,6 +911,8 @@ export function generateWorld() {
       totalWindowObstructions: windowObstructions.reduce((sum, n) => sum + n, 0),
       treeCanopyTop: Math.max(...leafCells.map((cell) => cell.y)) / V,
       forestShapeCounts,
+      cottageRoofRise: riseAt(Math.round(ridgeZ)) / V,
+      cottageRoofAxisError: Math.abs(riseAt(roofStartZ) - riseAt(roofEndZ)),
     },
   };
 }
