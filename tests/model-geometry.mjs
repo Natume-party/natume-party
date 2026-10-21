@@ -18,8 +18,8 @@ for (const touch of [true, false]) {
   const scope = {
     matchMedia: (query) => ({ matches: touch && query === '(pointer: coarse)' }),
   };
-  runInNewContext(generator + '\nglobalThis.testWorld = { V, generateWorld };', scope);
-  const { V, generateWorld } = scope.testWorld;
+  runInNewContext(generator + '\nglobalThis.testWorld = { V, generateWorld, T, HUT, TREE };', scope);
+  const { V, generateWorld, T, HUT, TREE } = scope.testWorld;
   assert.equal(V, touch ? 2 : 3, 'Voxel density mismatches test device');
   const { modelQA: qa } = generateWorld();
   assert.equal(qa.doorCenterError, 0, 'Door must be centered');
@@ -28,5 +28,24 @@ for (const touch of [true, false]) {
   assert.deepEqual(Array.from(qa.windowObstructions), [0, 0, 0, 0], 'Openings cannot be covered by timber');
   assert.equal(qa.totalWindowObstructions, 0, 'No window may contain an occluding voxel');
   assert.ok(Number.isFinite(qa.treeCanopyTop), 'Canopy must have a finite top');
-  process.stdout.write('PASS Natume V3.2 ' + (touch ? 'mobile' : 'desktop') + ' V=' + V + '\n');
+  const shapes = Object.fromEntries(Object.entries(qa.forestShapeCounts));
+  for (const species of ['round', 'tall', 'spreading', 'pine']) {
+    assert.ok(shapes[species] > 0, 'Distinct forest silhouette missing: ' + species);
+  }
+  // The cottage eaves must exist and remain symmetric on both roof ends.
+  const hx0 = Math.round(HUT.x0 * V), hx1 = Math.round(HUT.x1 * V);
+  const hz1 = Math.round(HUT.z1 * V);
+  const roofY = 2 + 3 * V;
+  const overhang = Math.max(1, Math.round(V * 0.67));
+  assert.equal(gridCell(hx0, roofY - 1, hz1 + overhang), T.LOG, 'Left fascia missing');
+  assert.equal(gridCell(hx1, roofY - 1, hz1 + overhang), T.LOG, 'Right fascia missing');
+  // The hero tree keeps actual trunk material at its original root coordinates.
+  const tx = Math.round(TREE.x * V), tz = Math.round(TREE.z * V);
+  assert.equal(gridCell(tx, V, tz), T.TLOG, 'Hero trunk must stay grounded');
+  assert.ok(world.fruitSpots.length >= 5, 'Existing jujube fruit interaction needs fruit anchors');
+  assert.ok(world.flowerSpots.length >= 10, 'Existing blossom interaction needs blossom anchors');
+  process.stdout.write('PASS Natume V3.2 ' + (touch ? 'mobile' : 'desktop') +
+    ' V=' + V + ' trees=' + JSON.stringify(shapes) + '\n');
+
+  function gridCell(x, y, z) { return world.grid.get(x, y, z); }
 }
