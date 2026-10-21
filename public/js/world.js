@@ -145,7 +145,19 @@ export function generateWorld() {
   // 小路范围：从屋门向南穿过小桥
   const rzDoor = riverZ(HUT.doorX);
   const pathZ1 = Math.ceil(rzDoor + RIVER_HALF) + 5;
-  const isPath = (xw, zw) => xw >= PATH_X0 && xw <= PATH_X1 && zw >= HUT.z1 + 0.3 && zw <= pathZ1;
+  // 主路连接桥面与门厅；支路按行走动线通往枣树树荫，避免把院子铺成广场。
+  const isPrimaryPath = (xw, zw) =>
+    xw >= PATH_X0 && xw <= PATH_X1 && zw >= HUT.z1 + 0.3 && zw <= pathZ1;
+  const yardSpur = (xw, zw) => {
+    const start = HUT.doorX, end = TREE.x - 1.25;
+    if (xw < start || xw > end) return false;
+    const t = (xw - start) / (end - start);
+    const centerZ = (HUT.z1 + 1.82) + 2.24 * Math.pow(t, 0.82) + 0.16 * Math.sin(t * Math.PI);
+    const halfWidth = 1.14 - 0.46 * t;
+    const wornEdge = 0.08 * (hash3(Math.round(xw * V), 13, Math.round(zw * V)) - 0.5);
+    return Math.abs(zw - centerZ) < halfWidth + wornEdge;
+  };
+  const isPath = (xw, zw) => isPrimaryPath(xw, zw) || yardSpur(xw, zw);
   // 留一块近门端有植被空隙的庭院，而非让河岸上的路径直接贴住屋墙。
   const inYard = (xw, zw) => {
     const dx = (xw - HUT.doorX) / 3.3, dz = (zw - (HUT.z1 + 1.8)) / 2.45;
@@ -900,7 +912,12 @@ export function generateWorld() {
     tufts, lilies, hillShrubs, hillStones,
     windmill: hub ? { hub, ground: wmGround / V, top: wmTop / V } : null,
     door: { x: (doorX0 + doorX1) / 2 / V, z: HUT.z1, width: doorCells / V },
-    yard: { x: HUT.doorX, z: HUT.z1 + 1.8, pathStartZ: HUT.z1 + 0.3, bankDistance: Math.abs(HUT.z1 - riverZ(HUT.doorX)) - RIVER_HALF },
+    yard: {
+      x: HUT.doorX, z: HUT.z1 + 1.8, pathStartZ: HUT.z1 + 0.3,
+      bankDistance: Math.abs(HUT.z1 - riverZ(HUT.doorX)) - RIVER_HALF,
+      spurEnd: { x: TREE.x - 1.25, z: (HUT.z1 + 1.82) + 2.24 },
+      connectsToTree: isPath(TREE.x - 1.25, (HUT.z1 + 1.82) + 2.24),
+    },
     windowWidth: windowCells / V,
     modelQA: {
       doorCenterError: Math.abs((doorX0 + doorX1) / 2 / V - HUT.doorX),
