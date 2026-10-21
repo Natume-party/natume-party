@@ -489,18 +489,15 @@ export function generateWorld() {
       const sz = zb + Math.round(bendZ * y / trunkH);
       grid.set(sx, h + y, sz, T.MLOG);
     }
-    // 四面短根趾顺坡抓地：只填露出土层的根，不铲平山坡，不生成悬空支架。
-    // 根趾最大向外伸半个世界单位，根部实际接触地表，冠幅仍由原四类树型控制。
-    const rootReach = Math.max(1, Math.round(V * (tall ? 0.36 : 0.51)));
-    const rootRise = Math.max(1, Math.round(V * 0.42));
-    for (const [dx, dz] of [[1,0],[-1,0],[0,1],[0,-1]]) {
-      for (let k = 1; k <= rootReach; k++) {
-        const rx = xb + dx * k, rz = zb + dz * k;
-        const soilY = getH(rx, rz);
-        if (soilY < 0 || Math.abs(soilY - h) > V) continue;
-        const endY = h + Math.max(1, rootRise - Math.floor((k - 1) * rootRise / rootReach));
-        for (let y = soilY + 1; y <= endY; y++)
-          if (grid.get(rx, y, rz) === T.AIR) grid.set(rx, y, rz, T.MLOG);
+    // 保守回退：撤销四方向伸出的块状树根，只保留紧贴地面的低矮根颈。
+    // 树冠/树种/树位仍沿用早先好看的稳定版本，山坡上的细干直接扎进坡面。
+    // 桌面 V=3 仅贴地加两片不连成方柱的短木根，避免低端视角看见黑底座。
+    if (V >= 3 && !tall) {
+      const rootSides = hash3(xb, 43, zb) > 0.5 ? [[1, 0], [0, -1]] : [[-1, 0], [0, 1]];
+      for (const [dx, dz] of rootSides) {
+        const rx = xb + dx, rz = zb + dz, soil = getH(rx, rz);
+        if (soil === h && grid.get(rx, h + 1, rz) === T.AIR)
+          grid.set(rx, h + 1, rz, T.MLOG);
       }
     }
     // 真实检查每棵树中心根与土地相连，检查距地面约 2 小格处已没有方形底座。
@@ -1040,7 +1037,7 @@ export function generateWorld() {
       totalWindowObstructions: windowObstructions.reduce((sum, n) => sum + n, 0),
       treeCanopyTop: Math.max(...leafCells.map((cell) => cell.y)) / V,
       forestShapeCounts,
-      forestGroundRootMode: 'tapered-shallow-roots',
+      forestGroundRootMode: 'minimal-ground-collar',
       forestGroundedCount,
       forestPedestalViolations,
       benchSeatWorldHeight: Math.max(2, Math.round(0.75 * V)) / V,
