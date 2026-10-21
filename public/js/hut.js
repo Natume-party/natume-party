@@ -3,7 +3,7 @@
 
 import { renderGuestbook } from './guestbook.js';
 
-const TABS = { about: '关于我', works: '作品', diary: '日记', guestbook: '留言' };
+const TABS = { about: '关于我', works: '作品', notes: '工作手记', diary: '日记', guestbook: '留言' };
 
 const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const safeUrl = (u) => (/^(https?:|mailto:|\/|#|\.\/)/i.test(u) ? u : '#');
@@ -69,7 +69,7 @@ export function initHut({ onClose } = {}) {
   let token = 0;
 
   function parse(hash) {
-    const m = (hash || '').match(/^#\/(about|works|diary|guestbook)(?:\/([\w-]+))?$/);
+    const m = (hash || '').match(/^#\/(about|works|notes|diary|guestbook)(?:\/([\w-]+))?$/);
     return m ? { tab: m[1], slug: m[2] || null } : null;
   }
 
@@ -85,18 +85,20 @@ export function initHut({ onClose } = {}) {
     }
     let html;
     try {
-      if (route.tab === 'diary') {
-        const list = await load('/content/diary/index.json');
+      if (route.tab === 'diary' || route.tab === 'notes') {
+        const folder = route.tab;
+        const sectionName = folder === 'notes' ? '工作手记' : '日记';
+        const list = await load(`/content/${folder}/index.json`);
         const posts = [...list].sort((a, b) => (a.date < b.date ? 1 : -1));
         if (route.slug) {
           const post = posts.find((p) => p.slug === route.slug);
           if (!post) throw new Error('404');
-          const md = await load(`/content/diary/${post.slug}.md`);
-          html = `<p class="back"><a href="#/diary">← 全部日记</a></p><p class="date">${esc(post.date)}</p>${markdown(md)}`;
+          const md = await load(`/content/${folder}/${post.slug}.md`);
+          html = `<p class="back"><a href="#/${folder}">← 全部${sectionName}</a></p><p class="date">${esc(post.date)}</p>${markdown(md)}`;
         } else {
           html = posts.length
-            ? `<ul class="posts">${posts.map((p) => `<li><a href="#/diary/${esc(p.slug)}"><span class="date">${esc(p.date)}</span><span class="title">${esc(p.title)}</span></a></li>`).join('')}</ul>`
-            : '<p>还没有日记。</p>';
+            ? `<ul class="posts">${posts.map((p) => `<li><a href="#/${folder}/${esc(p.slug)}"><span class="date">${esc(p.date)}</span><span class="title">${esc(p.title)}</span></a></li>`).join('')}</ul>`
+            : `<p>还没有${sectionName}。</p>`;
         }
       } else {
         html = markdown(await load(`/content/${route.tab}.md`));
