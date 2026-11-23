@@ -17,6 +17,11 @@
       "binding": "GUESTBOOK_DB",
       "database_name": "natume-guestbook-prod",
       "database_id": "ae07ac2b-8d57-44b4-95ff-f46528503ca5"
+    },
+    {
+      "binding": "QUOTE_DB",
+      "database_name": "natume-quote-prod",
+      "database_id": "b62e66a5-f137-4379-aa7b-3f7f46600e7b"
     }
   ],
   "previews": {
