@@ -77,6 +77,14 @@ body{background:#edf2ef;color:#23352e;font:15px "Microsoft YaHei UI",system-ui,s
 #simpleDelta{color:#38564b}
 #simpleTotal{float:none}
 @media(max-width:560px){.simple-base-fields{grid-template-columns:minmax(0,1fr)}}
+#simpleBaseConfig{white-space:pre-wrap}
+.simple-catalog-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin:10px 0}
+.simple-catalog-tools label{flex:1 1 135px;min-width:0}
+.simple-catalog-tools select{display:block;width:100%;margin-top:4px}
+.simple-catalog-tools button{min-height:36px}
+#simpleRuleNotice:empty,#categoryNotice:empty{display:none}
+#simpleRuleNotice,#categoryNotice{color:#38564b}
+@media(max-width:560px){.simple-catalog-tools button{min-height:44px}.simple-catalog-tools select{min-height:44px}}
 #simpleQuote .simple-scroll th:last-child{width:112px}
 #simpleQuote .simple-scroll :is(th,td):last-child{position:sticky;right:0;background:#fff;box-shadow:-1px 0 #bbcbbf;z-index:1}
 #simpleQuote .simple-scroll th:last-child{background:#e6efe8}
@@ -169,7 +177,7 @@ $('lock').onclick=()=>{try{locked=lock();QuoteBridge.save(localStorage,locked);$
 $('publish').onclick=()=>{try{if(!locked)throw Error('请先保存快照');QuoteBridge.publish(localStorage,locked,$('model').value,$('displayConfirmed').checked);location.href='/a3/display#model='+encodeURIComponent($('model').value)}catch(e){$('lockStatus').textContent=e.message}};
 for(const id of ['customer','sales','scopeConfirmed','quoteTime'])$(id).addEventListener('input',()=>{locked=null;$('publish').disabled=true});
 
-function renderRefs(){const all=cat.references||[],group=$('refGroup'),prev=group.value;group.replaceChildren(new Option('全部',''),...[...new Set(all.map(x=>x.group))].map(x=>new Option(x,x)));if([...group.options].some(x=>x.value===prev))group.value=prev;const term=$('refSearch').value.toLowerCase();const rows=all.filter(x=>(!group.value||x.group===group.value)&&JSON.stringify(x).toLowerCase().includes(term));$('refResults').replaceChildren(...rows.map(x=>{const e=document.createElement('p');e.textContent=x.group+' / '+x.label+' · '+(x.amount===null?'未定金额':('¥ '+x.amount.toLocaleString()))+' · '+x.priceType+' · P'+x.sourcePage+' '+(x.note||'');return e}));}
+function renderRefs(){const all=cat.references||[],group=$('refGroup'),prev=group.value;group.replaceChildren(new Option('全部',''),...[...new Set(all.map(x=>x.group))].map(x=>new Option(x,x)));if([...group.options].some(x=>x.value===prev))group.value=prev;const term=$('refSearch').value.toLowerCase();const rows=all.filter(x=>(!group.value||x.group===group.value)&&JSON.stringify(x).toLowerCase().includes(term));$('refResults').replaceChildren(...rows.map(x=>{const e=document.createElement('p');e.textContent=[[x.group,x.label].filter(Boolean).join(' / '),Number.isFinite(x.amount)?'¥ '+x.amount.toLocaleString():'未定金额',x.priceType,x.sourcePage?'P'+x.sourcePage:'',x.note].filter(Boolean).join(' · ');return e}));}
 $('refSearch').oninput=renderRefs;$('refGroup').onchange=renderRefs;renderRefs();
 $('load44').onclick=async()=>{try{const response=await fetch('catalog-local.json',{cache:'no-store'});if(!response.ok)throw Error('目录文件读取失败');const next=await response.json();if(cat.models.length&&!confirm('合并合成目录并保留历史版本？'))return;persist(V44Tools.mergeCatalog(cat,next));items=[];manual=[];draw();msg('合成目录读取成功')}catch(e){msg(e.message+'；可改为手动导入 catalog-local.json')}};
 $('repAdd').onclick=()=>{try{if(!$('repOld').value||!$('repNew').value||!$('repConfirm').checked)throw Error('请核对新旧价格');manual.push(V44Tools.draftReplacement({label:$('repName').value.trim(),source:$('repSource').value.trim(),oldAmount:Number($('repOld').value),newAmount:Number($('repNew').value),qty:Number($('repQty').value),priceType:'MATCHED_SELL_PRICE'}));$('repConfirm').checked=false;draw()}catch(e){msg(e.message)}};

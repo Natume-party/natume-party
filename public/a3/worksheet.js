@@ -441,8 +441,87 @@ $('pastCalculations').onclick=()=>{toggleHome(false);showCenter()};
 const defaultFields=captureFields();
 const simple=document.createElement('section');
 simple.id='simpleQuote';simple.hidden=true;main.append(simple);
-simple.innerHTML='<header><button id="simpleBack">返回中心</button><h1>新建核算</h1></header><div class="simple-meta"><label>客户<input id="simpleCustomer"></label><label>业务员<input id="simpleSales"></label><label>报价日期<input type="date" id="simpleDate"></label></div><section class="simple-base"><h2>设备基础价</h2><div class="simple-base-fields"><label>设备型号<select id="simpleModel"></select></label><div><span>基础价（人民币）</span><strong id="simpleBaseAmount">—</strong><small id="simpleBaseStatus"></small></div></div></section><h2 class="simple-adjustments-title">增减项</h2><div class="simple-scroll"><table><thead><tr><th>行</th><th>增减项目</th><th>加 / 减</th><th>数量</th><th>单价（元）</th><th>金额（元）</th><th>行操作</th></tr></thead><tbody id="simpleBody"></tbody></table></div><div class="simple-bottom"><button id="simpleAdd">＋ 添加增减项</button><div class="simple-summary"><span id="simpleDelta"></span><strong id="simpleTotal"></strong></div></div><details id="sheetFinalize" class="sheet-final"><summary>核价确认、对外配置与币种</summary><div class="fields"><label>复核人<input id="simpleReviewer"></label><label>核价依据<input id="simpleEvidence"></label><label>报价币种<select id="simpleCurrency"><option>CNY</option><option>USD</option><option>EUR</option><option>RUB</option><option>VND</option><option>JPY</option><option>GBP</option><option>AED</option><option>SAR</option><option>THB</option><option>IDR</option></select></label></div><div id="simpleFx" class="fields" hidden><label>1 CNY = 外币<input id="simpleRate"></label><label>汇率来源<input id="simpleRateSource"></label><label>汇率时间<input id="simpleRateTime" type="datetime-local"></label><label><input id="simpleRateConfirm" type="checkbox">已人工核对汇率</label></div><label>对外配置<textarea id="simpleConfig" rows="3" placeholder="每行填写 项目=规格"></textarea></label><label><input id="simpleConfirm" type="checkbox">已核对单价及供货范围</label><label><input id="simpleDisplayConfirm" type="checkbox">已核对客户展示内容</label></details><p id="simpleForeignPreview"></p><p id="simpleBlockers" role="status"></p><footer><button id="simpleSave">保存草稿</button><button id="simpleAdvanced">本机展示</button><button id="simpleRevoke">撤销展示</button><button class="primary" id="simplePrint">输出报价单</button></footer><p id="simpleNote" role="status"></p><datalist id="simpleOptions"></datalist>';
-const sheetBody=$('simpleBody'), picks=new Map();
+simple.innerHTML='<header><button id="simpleBack">返回中心</button><h1>新建核算</h1></header><div class="simple-meta"><label>客户<input id="simpleCustomer"></label><label>业务员<input id="simpleSales"></label><label>报价日期<input type="date" id="simpleDate"></label></div><section class="simple-base"><h2>设备基础价</h2><div class="simple-base-fields"><label>设备型号<select id="simpleModel"></select></label><div><span>基础价（人民币）</span><strong id="simpleBaseAmount">—</strong><small id="simpleBaseStatus"></small><small id="simpleBaseConfig"></small></div></div></section><h2 class="simple-adjustments-title">设备增减项</h2><div class="simple-catalog-tools"><label>目录项目<select id="simpleRuleChoice"></select></label><button type="button" id="simpleUseRule">加入增减项</button></div><p id="simpleRuleNotice" role="status"></p><details id="simpleCategories"><summary>价格分类与本机目录</summary><div class="simple-catalog-tools"><label>类型<select id="categoryKind"><option value="model">设备基础价</option><option value="rule">设备增减项</option><option value="reference">配套参考</option></select></label><label>项目<select id="categoryItem"></select></label><label>分类<select id="categoryFamily"></select></label><button type="button" id="categorySave">保存分类</button></div><p id="categoryNotice" role="status"></p><button type="button" id="simpleImportLocal">导入本机目录</button></details><div class="simple-scroll"><table><thead><tr><th>行</th><th>增减项目</th><th>加 / 减</th><th>数量</th><th>单价（元）</th><th>金额（元）</th><th>行操作</th></tr></thead><tbody id="simpleBody"></tbody></table></div><div class="simple-bottom"><button id="simpleAdd">＋ 添加临时项</button><div class="simple-summary"><span id="simpleDelta"></span><strong id="simpleTotal"></strong></div></div><details id="sheetFinalize" class="sheet-final"><summary>核价确认、对外配置与币种</summary><div class="fields"><label>复核人<input id="simpleReviewer"></label><label>核价依据<input id="simpleEvidence"></label><label>报价币种<select id="simpleCurrency"><option>CNY</option><option>USD</option><option>EUR</option><option>RUB</option><option>VND</option><option>JPY</option><option>GBP</option><option>AED</option><option>SAR</option><option>THB</option><option>IDR</option></select></label></div><div id="simpleFx" class="fields" hidden><label>1 CNY = 外币<input id="simpleRate"></label><label>汇率来源<input id="simpleRateSource"></label><label>汇率时间<input id="simpleRateTime" type="datetime-local"></label><label><input id="simpleRateConfirm" type="checkbox">已人工核对汇率</label></div><label>对外配置<textarea id="simpleConfig" rows="3" placeholder="每行填写 项目=规格"></textarea></label><label><input id="simpleConfirm" type="checkbox">已核对单价及供货范围</label><label><input id="simpleDisplayConfirm" type="checkbox">已核对客户展示内容</label></details><p id="simpleForeignPreview"></p><p id="simpleBlockers" role="status"></p><footer><button id="simpleSave">保存草稿</button><button id="simpleAdvanced">本机展示</button><button id="simpleRevoke">撤销展示</button><button class="primary" id="simplePrint">输出报价单</button></footer><p id="simpleNote" role="status"></p><datalist id="simpleOptions"></datalist>';
+const sheetBody=$('simpleBody'), picks=new Map(), ruleChoices=new Map();
+const families=[
+  ['soil','稳定土'],['concrete','混凝土'],['asphalt','沥青'],['common','通用'],['unknown','待分类']
+];
+const familyNames=new Map(families);
+const categoriesKey='quote-category-overrides-v1';
+let categories=JSON.parse(localStorage.getItem(categoriesKey)||'{}');
+function automaticFamily(entry){
+  const source=[entry.id,entry.label,entry.group].filter(Boolean).join(' ');
+  const matched=[
+    ['soil', /稳定土|\bWCB/i],
+    ['concrete', /混凝土|\bHZS/i],
+    ['asphalt', /沥青|热再生|\bLB\d|\bLZS/i],
+    ['common', /通用/],
+  ].filter(([,term])=>term.test(source));
+  return matched.length===1?matched[0][0]:'unknown';
+}
+function referenceKey(entry){
+  return JSON.stringify([entry.group||'',entry.label,entry.sourcePage||'']);
+}
+function categoryKey(kind,entry){
+  return kind+':'+(kind==='reference'?referenceKey(entry):entry.id);
+}
+function familyOf(kind,entry){
+  if(!entry)return 'unknown';
+  const override=categories[categoryKey(kind,entry)];
+  if(familyNames.has(override))return override;
+  if(kind==='rule'){
+    const model=cat.models.find(item=>item.id===entry.model);
+    return model?familyOf('model',model):automaticFamily(entry);
+  }
+  return automaticFamily(entry);
+}
+const classificationRows=new Map();
+function renderCategoryItems(){
+  const kind=$('categoryKind').value, selector=$('categoryItem'), previous=selector.value;
+  const source=kind==='reference'?(cat.references||[]):cat[kind==='model'?'models':'rules'];
+  classificationRows.clear();
+  for(const item of source){
+    const key=categoryKey(kind,item);
+    if(!classificationRows.has(key)||(classificationRows.get(key).rev||0)<(item.rev||0))classificationRows.set(key,item);
+  }
+  selector.replaceChildren(new Option('请选择项目',''));
+  for(const [key,item] of classificationRows){
+    const title=kind==='rule'?item.model+' · '+item.label:item.label;
+    selector.add(new Option(familyNames.get(familyOf(kind,item))+' · '+title,key));
+  }
+  selector.value=classificationRows.has(previous)?previous:'';
+  updateCategorySelection();
+}
+function updateCategorySelection(){
+  const key=$('categoryItem').value;
+  $('categoryFamily').value=categories[key]||'';
+  $('categorySave').disabled=!classificationRows.has(key);
+}
+$('categoryFamily').replaceChildren(new Option('自动识别',''),...families.map(([id,label])=>new Option(label,id)));
+$('categoryKind').onchange=renderCategoryItems;
+$('categoryItem').onchange=updateCategorySelection;
+$('categorySave').onclick=()=>{
+  const key=$('categoryItem').value, value=$('categoryFamily').value;
+  if(!classificationRows.has(key))return;
+  const updated={...categories};
+  if(value)updated[key]=value;else delete updated[key];
+  try{
+    localStorage.setItem(categoriesKey,JSON.stringify(updated));
+    categories=updated;
+    refreshCatalogRows();
+    $('categoryNotice').textContent='分类已保存在当前浏览器';
+  }catch(e){$('categoryNotice').textContent=e.message}
+};
+const importField=$('file');
+const importCatalogFromFile=importField.onchange;
+importField.onchange=async ()=>{
+  await importCatalogFromFile();
+  if(!simple.hidden){
+    refreshCatalogRows();
+    $('categoryNotice').textContent=$('status').textContent;
+  }
+};
+$('simpleImportLocal').onclick=()=>importField.click();
 let sheetId,lines=[],sheetStart='',openedAt,sheetParent;
 const emptyLine=()=>({name:'',sign:1,qty:'1',unit:'',model:null});
 function baseRows(){return lines.filter(r=>r.kind==='model')}
@@ -458,9 +537,14 @@ function updateBasePanel(){
   const selector=$('simpleModel'), rows=baseRows();
   const selected=selectedModel();
   selector.replaceChildren(new Option('请选择设备型号',''));
-  for(const id of new Set(cat.models.map(r=>r.id))){
-    const r=sheetPrice('models',id);
-    if(r)selector.add(new Option(r.label.includes(id)?r.label:id+' · '+r.label,id));
+  const models=Array.from(new Set(cat.models.map(r=>r.id)),id=>sheetPrice('models',id)).filter(Boolean);
+  for(const [id,label] of families){
+    const group=document.createElement('optgroup');
+    group.label=label;
+    for(const model of models.filter(item=>familyOf('model',item)===id)){
+      group.append(new Option(model.label.includes(model.id)?model.label:model.id+' · '+model.label,model.id));
+    }
+    if(group.children.length)selector.append(group);
   }
   if(selected && ![...selector.options].some(option=>option.value===selected))
     selector.add(new Option(selected+'（当前目录无可用型号）',selected));
@@ -473,6 +557,9 @@ function updateBasePanel(){
   const pendingText=pending?.status==='STAGED' && pending.rev>row.rev &&
     pending.amount!==null?'待核调整 '+format(pending.amount)+' 元':'';
   $('simpleBaseStatus').textContent=[note,pendingText].filter(Boolean).join(' · ');
+  const model=sheetPrice('models',selected);
+  const config=model?.standardConfiguration||model?.scope;
+  $('simpleBaseConfig').textContent=config?'基础配置 '+config:'';
 }
 $('simpleModel').onchange=()=>{
   const id=$('simpleModel').value;
@@ -485,42 +572,76 @@ $('simpleModel').onchange=()=>{
 };
 function populatePicks(){
   picks.clear();
-  function offer(source,name,unit,model=null,identity={}){
-    if(!name||(unit!==null&&!Number.isSafeInteger(unit)))return;
-    const key=[source,name,identity.id,unit==null?'缺价':format(unit)+' 元',identity.priceNote].filter(Boolean).join(' · ');
-    picks.set(key,{name,sign:unit<0?-1:1,qty:'1',unit:unit==null?'':String(Math.abs(unit)),model,...identity});
-  }
+  ruleChoices.clear();
   const model=selectedModel(), date=$('simpleDate').value;
+  const selected=sheetPrice('models',model), family=familyOf('model',selected);
+  const selector=$('simpleRuleChoice');
+  const previous=selector.value;
+  selector.replaceChildren(new Option(model?'选择本型号增减项':'请先选择设备',''));
+  const options={increase:[],decrease:[],included:[],pending:[]};
   for(const id of new Set(cat.rules.map(x=>x.id))){
-    const r=CatalogCore.reviewed(cat.rules,id,date);
-    const visible=r||sheetPrice('rules',id);
-    if(visible?.model===model)offer('设备增减项',visible.label,visible.amount,null,
-      {id,rev:visible.rev,kind:'rule',priceNote:visible.amount==null?'缺价':!r?'待核':''});
+    const r=sheetPrice('rules',id);
+    if(!r||r.model!==model)continue;
+    const kind=r.amount===null?'pending':r.amount>0?'increase':r.amount<0?'decrease':'included';
+    const priceNote=r.amount===null?'缺价':r.status==='STAGED'?'待核':'';
+    const value={name:r.label,sign:r.amount<0?-1:1,qty:'1',unit:r.amount===null?'':String(Math.abs(r.amount)),
+      model:null,id:r.id,rev:r.rev,kind:'rule',priceNote};
+    ruleChoices.set(r.id,value);
+    const label=[r.label,r.amount===null?'金额待核':format(r.amount)+' 元',familyNames.get(familyOf('rule',r)),priceNote==='待核'?'待核':''].filter(Boolean);
+    options[kind].push(new Option(label.join(' · '),r.id));
   }
-  for(const [index,ref] of (cat.references||[]).entries()){
-    const source=[ref.group,ref.sourcePage?'P'+ref.sourcePage:'','索引 '+(index+1)].filter(Boolean).join(' / ');
-    offer('部件参考',ref.label,null,null,{id:source,priceNote:'需核价'});
+  for(const [kind,label] of [['increase','增配'],['decrease','减配'],['included','不另计价'],['pending','金额待核']]){
+    if(!options[kind].length)continue;
+    const group=document.createElement('optgroup');
+    group.label=label;
+    group.append(...options[kind]);
+    selector.append(group);
+  }
+  selector.value=ruleChoices.has(previous)?previous:'';
+  $('simpleUseRule').disabled=!selector.value;
+  $('simpleRuleNotice').textContent=model&&!ruleChoices.size?'该型号暂无适用的目录增减项':'';
+
+  function offer(source,name,unit){
+    if(!name||(unit!==null&&!Number.isSafeInteger(unit)))return;
+    const key=[source,name,unit===null?'需核价':format(unit)+' 元'].join(' · ');
+    picks.set(key,{name,sign:unit<0?-1:1,qty:'1',unit:unit===null?'':String(Math.abs(unit)),model:null});
+  }
+  for(const ref of cat.references||[]){
+    const category=familyOf('reference',ref);
+    if(selected&&(category==='common'||(category!=='unknown'&&category===family))){
+      offer(familyNames.get(category)+'配套参考',ref.label,null);
+    }
   }
   for(const q of V45.read(localStorage)){
+    if(!model||(q.request?.model||q.input?.model)!==model)continue;
     if(q.worksheet){
-      for(const line of q.worksheet.lines){
-        if(line.kind==='manual'){offer('历史临时项',line.name,line.unit);continue}
-        if(line.kind!=='rule')continue;
-        const r=CatalogCore.reviewed(cat.rules,line.id,date);
-        if(r?.model===model)offer('历史增减项',line.name,r.amount,null,{id:r.id,rev:r.rev,kind:'rule'});
-      }
+      for(const line of q.worksheet.lines)if(line.kind==='manual')offer('历史临时项',line.name,line.unit);
       continue;
     }
-    for(const old of q.catalog?.rules||[]){
-      const r=CatalogCore.reviewed(cat.rules,old.id,date);
-      if(r?.model===model)offer('历史增减项',old.label,r.amount,null,{id:r.id,rev:r.rev,kind:'rule'});
-    }
-    for(const r of q.request?.manual||[])offer('历史',r.label,r.kind==='REPLACEMENT_DRAFT'?r.newAmount-r.oldAmount:r.amount);
-    for(const r of q.input?.lines||[])offer('历史',r.id,r.amount);
+    for(const r of q.request?.manual||[])offer('历史临时项',r.label,r.kind==='REPLACEMENT_DRAFT'?r.newAmount-r.oldAmount:r.amount);
+    for(const r of q.input?.lines||[])offer('历史临时项',r.id,r.amount);
   }
-  for(const d of drafts())for(const r of d.sheetLines||[])if(!r.kind&&r.unit!=='')offer('草稿临时项',r.name,r.sign*Number(r.unit));
+  for(const draft of drafts()){
+    if(!model||draft.fields?.model!==model)continue;
+    for(const row of draft.sheetLines||[])if(!row.kind&&row.unit!=='')offer('草稿临时项',row.name,row.sign*Number(row.unit));
+  }
   $('simpleOptions').replaceChildren(...Array.from(picks.keys(),key=>new Option(key)));
+  renderCategoryItems();
 }
+$('simpleRuleChoice').onchange=()=>{$('simpleUseRule').disabled=!$('simpleRuleChoice').value};
+$('simpleUseRule').onclick=()=>{
+  const choice=ruleChoices.get($('simpleRuleChoice').value);
+  if(!choice)return;
+  if(adjustmentRows().some(row=>row.kind==='rule'&&row.id===choice.id)){
+    $('simpleRuleNotice').textContent='该目录项目已经加入，请直接修改数量';
+    return;
+  }
+  const empty=adjustmentRows().find(row=>!row.kind&&!used(row));
+  if(empty)Object.assign(empty,choice);else lines.push({...choice});
+  $('simpleConfirm').checked=false;$('simpleDisplayConfirm').checked=false;
+  $('simpleRuleNotice').textContent='';
+  renderLines();sheetReadiness();
+};
 function fingerprint(){return JSON.stringify([lines,$('simpleCustomer').value,$('simpleSales').value,$('simpleDate').value])}
 function beginSheet(record){
   if(home.hidden)toggleHome(true);home.hidden=true;simple.hidden=false;
@@ -575,11 +696,11 @@ function renderLines(){
     const tr=sheetBody.insertRow();tr.insertCell().textContent=i+1;
     for(const key of ['name','sign','qty','unit']){
       const el=document.createElement(key==='sign'?'select':'input');
-      if(key==='name'){el.setAttribute('list','simpleOptions');el.placeholder='选配置、历史增减项或输入临时项'}
+      if(key==='name'){el.setAttribute('list','simpleOptions');el.placeholder='输入临时项，或复用参考和历史临时项'}
       if(key==='sign'){el.append(new Option('＋ 加项','1'),new Option('－ 减项','-1'))}
       if(key==='qty'||key==='unit')el.inputMode='numeric';
       if(key==='sign')el.disabled=Boolean(r.kind);
-      if(key==='unit')el.readOnly=Boolean(r.kind);
+      if(key==='name'||key==='unit')el.readOnly=Boolean(r.kind);
       el.value=r[key];el.setAttribute('aria-label','第'+(i+1)+'行'+({name:'项目',sign:'方向',qty:'数量',unit:'单价'}[key]));
       let before;
       el.onfocus=()=>{before=structuredClone(r)};
