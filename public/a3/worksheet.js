@@ -441,7 +441,7 @@ $('pastCalculations').onclick=()=>{toggleHome(false);showCenter()};
 const defaultFields=captureFields();
 const simple=document.createElement('section');
 simple.id='simpleQuote';simple.hidden=true;main.append(simple);
-simple.innerHTML='<header><button id="simpleBack">返回历史</button><h1>新建核算</h1></header><div class="simple-meta"><label>客户<input id="simpleCustomer"></label><label>业务员<input id="simpleSales"></label><label>报价日期<input type="date" id="simpleDate"></label></div><section class="simple-base"><h2>设备基础价</h2><div class="simple-base-fields"><label>设备型号<select id="simpleModel"></select></label><div><span>基础价（人民币）</span><strong id="simpleBaseAmount">—</strong><small id="simpleBaseStatus"></small><small id="simpleBaseConfig"></small></div></div></section><h2 class="simple-adjustments-title">设备增减项</h2><div class="simple-catalog-tools"><label>选用设备增减项<select id="simpleRuleChoice"></select></label><button type="button" id="simpleUseRule">加入增减项</button></div><p id="simpleRuleNotice" role="status"></p><div class="simple-scroll"><table><thead><tr><th>行</th><th>增减项目</th><th>加 / 减</th><th>数量</th><th>单价（元）</th><th>金额（元）</th><th>行操作</th></tr></thead><tbody id="simpleBody"></tbody></table></div><div class="simple-bottom"><button id="simpleAdd">＋ 添加临时项</button><div class="simple-summary"><span id="simpleDelta"></span><strong id="simpleTotal"></strong></div></div><details id="sheetFinalize" class="sheet-final"><summary>核价确认、对外配置与币种</summary><div class="fields"><label>复核人<input id="simpleReviewer"></label><label>核价依据<input id="simpleEvidence"></label><label>报价币种<select id="simpleCurrency"><option>CNY</option><option>USD</option><option>EUR</option><option>RUB</option><option>VND</option><option>JPY</option><option>GBP</option><option>AED</option><option>SAR</option><option>THB</option><option>IDR</option></select></label></div><div id="simpleFx" class="fields" hidden><label>1 CNY = 外币<input id="simpleRate"></label><label>汇率来源<input id="simpleRateSource"></label><label>汇率时间<input id="simpleRateTime" type="datetime-local"></label><label><input id="simpleRateConfirm" type="checkbox">已人工核对汇率</label></div><label>对外配置<textarea id="simpleConfig" rows="3" placeholder="每行填写 项目=规格"></textarea></label><label><input id="simpleConfirm" type="checkbox">已核对单价及供货范围</label><label><input id="simpleDisplayConfirm" type="checkbox">已核对客户展示内容</label></details><p id="simpleForeignPreview"></p><p id="simpleBlockers" role="status"></p><footer><button id="simpleSave">保存草稿</button><button id="simpleAdvanced">本机展示</button><button id="simpleRevoke">撤销展示</button><button class="primary" id="simplePrint">输出报价单</button></footer><p id="simpleNote" role="status"></p><datalist id="simpleOptions"></datalist>';
+simple.innerHTML='<header><button id="simpleBack">返回历史</button><h1>新建核算</h1></header><div class="simple-meta"><label>客户<input id="simpleCustomer"></label><label>业务员<input id="simpleSales"></label><label>报价日期<input type="date" id="simpleDate"></label></div><section class="simple-base"><h2>设备基础价</h2><div class="simple-base-fields"><label>设备型号<select id="simpleModel"></select></label><div><span>基础价（人民币）</span><strong id="simpleBaseAmount">—</strong><small id="simpleBaseStatus"></small><small id="simpleBaseConfig"></small></div></div></section><h2 class="simple-adjustments-title">设备增减项</h2><div class="simple-scroll"><table><thead><tr><th>行</th><th>增减项目</th><th>加 / 减</th><th>数量</th><th>单价（元）</th><th>金额（元）</th><th>行操作</th></tr></thead><tbody id="simpleBody"></tbody></table></div><div class="simple-bottom"><button id="simpleAdd">＋ 添加临时项</button><div class="simple-summary"><span id="simpleDelta"></span><strong id="simpleTotal"></strong></div></div><details id="sheetFinalize" class="sheet-final"><summary>核价确认、对外配置与币种</summary><div class="fields"><label>复核人<input id="simpleReviewer"></label><label>核价依据<input id="simpleEvidence"></label><label>报价币种<select id="simpleCurrency"><option>CNY</option><option>USD</option><option>EUR</option><option>RUB</option><option>VND</option><option>JPY</option><option>GBP</option><option>AED</option><option>SAR</option><option>THB</option><option>IDR</option></select></label></div><div id="simpleFx" class="fields" hidden><label>1 CNY = 外币<input id="simpleRate"></label><label>汇率来源<input id="simpleRateSource"></label><label>汇率时间<input id="simpleRateTime" type="datetime-local"></label><label><input id="simpleRateConfirm" type="checkbox">已人工核对汇率</label></div><label>对外配置<textarea id="simpleConfig" rows="3" placeholder="每行填写 项目=规格"></textarea></label><label><input id="simpleConfirm" type="checkbox">已核对单价及供货范围</label><label><input id="simpleDisplayConfirm" type="checkbox">已核对客户展示内容</label></details><p id="simpleForeignPreview"></p><p id="simpleBlockers" role="status"></p><footer><button id="simpleSave">保存草稿</button><button id="simpleAdvanced">本机展示</button><button id="simpleRevoke">撤销展示</button><button class="primary" id="simplePrint">输出报价单</button></footer><p id="simpleNote" role="status"></p>';
 aux.insertAdjacentHTML('afterbegin','<section id="a3CategoryTools"><h2>价格目录</h2><p id="a3CatalogSummary" role="status"></p><div class="simple-catalog-tools"><label>类型<select id="categoryKind"><option value="model">设备基础价</option><option value="rule">设备增减项</option><option value="reference">配套参考</option></select></label><label>项目<select id="categoryItem"></select></label><label>分类<select id="categoryFamily"></select></label><button type="button" id="categorySave">保存分类</button></div><p id="categoryNotice" role="status"></p><button type="button" id="simpleImportLocal">导入本机目录</button></section>');
 aux.querySelector('summary').textContent='信息维护';
 $('file').closest('label').hidden=true;
@@ -486,7 +486,77 @@ infoTab.onclick=()=>{
   renderCategoryItems();
   markA3Tab(infoTab);
 };
-const sheetBody=$('simpleBody'), picks=new Map(), ruleChoices=new Map();
+const sheetBody=$('simpleBody'), picks=[];
+const rowSuggestions=document.createElement('div');
+rowSuggestions.id='a3RowSuggestions';
+rowSuggestions.setAttribute('role','listbox');
+rowSuggestions.setAttribute('aria-label','增减项目备选');
+rowSuggestions.hidden=true;
+simple.append(rowSuggestions);
+let suggestionInput=null,activeSuggestion=-1,suggested=[];
+function closeSheetSuggestions(){
+  if(suggestionInput){
+    suggestionInput.setAttribute('aria-expanded','false');
+    suggestionInput.removeAttribute('aria-activedescendant');
+  }
+  suggestionInput=null;
+  rowSuggestions.hidden=true;
+  suggested=[];
+  activeSuggestion=-1;
+}
+function positionSheetSuggestions(){
+  if(!suggestionInput)return;
+  const rect=suggestionInput.getBoundingClientRect();
+  const viewport=window.visualViewport;
+  const leftEdge=viewport?.offsetLeft||0, topEdge=viewport?.offsetTop||0;
+  const width=viewport?.width||innerWidth, height=viewport?.height||innerHeight;
+  const bottomEdge=topEdge+height;
+  if(rect.bottom<topEdge||rect.top>bottomEdge){closeSheetSuggestions();return}
+  const panelWidth=Math.min(width-16,Math.max(260,rect.width));
+  rowSuggestions.style.width=panelWidth+'px';
+  rowSuggestions.style.left=Math.max(leftEdge+8,Math.min(rect.left,leftEdge+width-panelWidth-8))+'px';
+  const below=bottomEdge-rect.bottom-8,above=rect.top-topEdge-8,top=below<145&&above>below;
+  rowSuggestions.style.maxHeight=Math.max(44,Math.min(280,top?above:below))+'px';
+  rowSuggestions.style.top=(top?Math.max(topEdge+4,rect.top-4-rowSuggestions.offsetHeight):rect.bottom+4)+'px';
+}
+function highlightSheetSuggestion(index,scroll=false){
+  activeSuggestion=index;
+  for(const [i,option] of [...rowSuggestions.children].entries())option.setAttribute('aria-selected',String(i===index));
+  const active=rowSuggestions.children[index];
+  suggestionInput.setAttribute('aria-activedescendant',active.id);
+  if(scroll)active.scrollIntoView({block:'nearest',inline:'nearest'});
+}
+function showSheetSuggestions(input,row,choose){
+  const query=input.value.trim();
+  if(!query){closeSheetSuggestions();return}
+  const available=picks.filter(p=>p.value.kind!=='rule'||!adjustmentRows().some(other=>other!==row&&other.kind==='rule'&&other.id===p.value.id));
+  const matches=LUTON.commandPalette.rankCommands(available,query,8);
+  if(!matches.length){closeSheetSuggestions();return}
+  closeSheetSuggestions();
+  suggestionInput=input;
+  suggested=matches;
+  rowSuggestions.replaceChildren(...matches.map((item,index)=>{
+    const option=document.createElement('div');
+    option.id='a3RowSuggestion'+index;
+    option.setAttribute('role','option');
+    const name=document.createElement('span');
+    name.textContent=item.label;
+    const detail=document.createElement('small');
+    detail.textContent=item.detail;
+    option.append(name,detail);
+    option.onclick=()=>choose(item.value);
+    return option;
+  }));
+  rowSuggestions.hidden=false;
+  input.setAttribute('aria-expanded','true');
+  highlightSheetSuggestion(0);
+  positionSheetSuggestions();
+}
+rowSuggestions.addEventListener('mousedown',event=>event.preventDefault());
+window.addEventListener('scroll',positionSheetSuggestions,true);
+window.addEventListener('resize',positionSheetSuggestions);
+window.visualViewport?.addEventListener('resize',positionSheetSuggestions);
+
 const families=[
   ['soil','稳定土'],['concrete','混凝土'],['asphalt','沥青'],['common','通用'],['unknown','待分类']
 ];
@@ -618,40 +688,33 @@ $('simpleModel').onchange=()=>{
   refreshCatalogRows();
 };
 function populatePicks(){
-  picks.clear();
-  ruleChoices.clear();
+  closeSheetSuggestions();
+  picks.length=0;
   const model=selectedModel(), date=$('simpleDate').value;
   const selected=sheetPrice('models',model), family=familyOf('model',selected);
-  const selector=$('simpleRuleChoice');
-  const previous=selector.value;
-  selector.replaceChildren(new Option(model?'选择本型号增减项':'请先选择设备',''));
-  const options={increase:[],decrease:[],included:[],pending:[]};
   for(const id of new Set(cat.rules.map(x=>x.id))){
     const r=sheetPrice('rules',id);
     if(!r||r.model!==model)continue;
-    const kind=r.amount===null?'pending':r.amount>0?'increase':r.amount<0?'decrease':'included';
+    const group=r.amount===null?'金额待核':r.amount>0?'增配':r.amount<0?'减配':'不另计价';
     const priceNote=r.amount===null?'缺价':r.status==='STAGED'?'待核':'';
-    const value={name:r.label,sign:r.amount<0?-1:1,qty:'1',unit:r.amount===null?'':String(Math.abs(r.amount)),
-      model:null,id:r.id,rev:r.rev,kind:'rule',priceNote};
-    ruleChoices.set(r.id,value);
-    const label=[r.label,r.amount===null?'金额待核':format(r.amount)+' 元',familyNames.get(familyOf('rule',r)),priceNote==='待核'?'待核':''].filter(Boolean);
-    options[kind].push(new Option(label.join(' · '),r.id));
+    const detail=[group,familyNames.get(familyOf('rule',r)),r.amount===null?'':format(r.amount)+' 元',
+      priceNote==='待核'?'待核':''].filter(Boolean).join(' · ');
+    picks.push({label:r.label,detail,keywords:[r.id,group,r.scope],value:{
+      name:r.label,sign:r.amount<0?-1:1,unit:r.amount===null?'':String(Math.abs(r.amount)),
+      kind:'rule',id:r.id,rev:r.rev,model:null,priceNote
+    }});
   }
-  for(const [kind,label] of [['increase','增配'],['decrease','减配'],['included','不另计价'],['pending','金额待核']]){
-    if(!options[kind].length)continue;
-    const group=document.createElement('optgroup');
-    group.label=label;
-    group.append(...options[kind]);
-    selector.append(group);
-  }
-  selector.value=ruleChoices.has(previous)?previous:'';
-  $('simpleUseRule').disabled=!selector.value;
-  $('simpleRuleNotice').textContent=model&&!ruleChoices.size?'该型号暂无适用的目录增减项':'';
-
+  const seen=new Set();
   function offer(source,name,unit){
     if(!name||(unit!==null&&!Number.isSafeInteger(unit)))return;
-    const key=[source,name,unit===null?'需核价':format(unit)+' 元'].join(' · ');
-    picks.set(key,{name,sign:unit<0?-1:1,qty:'1',unit:unit===null?'':String(Math.abs(unit)),model:null});
+    const detail=source+' · '+(unit===null?'需手填单价':format(unit)+' 元');
+    const key=JSON.stringify([name,detail]);
+    if(seen.has(key))return;
+    seen.add(key);
+    picks.push({label:name,detail,keywords:[source],value:{
+      name,sign:unit<0?-1:1,unit:unit===null?'':String(Math.abs(unit)),
+      model:null,kind:null,id:null,rev:null,priceNote:''
+    }});
   }
   for(const ref of cat.references||[]){
     const category=familyOf('reference',ref);
@@ -672,23 +735,8 @@ function populatePicks(){
     if(!model||draft.fields?.model!==model)continue;
     for(const row of draft.sheetLines||[])if(!row.kind&&row.unit!=='')offer('草稿临时项',row.name,row.sign*Number(row.unit));
   }
-  $('simpleOptions').replaceChildren(...Array.from(picks.keys(),key=>new Option(key)));
   renderCategoryItems();
 }
-$('simpleRuleChoice').onchange=()=>{$('simpleUseRule').disabled=!$('simpleRuleChoice').value};
-$('simpleUseRule').onclick=()=>{
-  const choice=ruleChoices.get($('simpleRuleChoice').value);
-  if(!choice)return;
-  if(adjustmentRows().some(row=>row.kind==='rule'&&row.id===choice.id)){
-    $('simpleRuleNotice').textContent='该目录项目已经加入，请直接修改数量';
-    return;
-  }
-  const empty=adjustmentRows().find(row=>!row.kind&&!used(row));
-  if(empty)Object.assign(empty,choice);else lines.push({...choice});
-  $('simpleConfirm').checked=false;$('simpleDisplayConfirm').checked=false;
-  $('simpleRuleNotice').textContent='';
-  renderLines();sheetReadiness();
-};
 function fingerprint(){return JSON.stringify([lines,$('simpleCustomer').value,$('simpleSales').value,$('simpleDate').value])}
 function beginSheet(record){
   if(home.hidden)toggleHome(true);home.hidden=true;simple.hidden=false;markA3Tab(newTab);
@@ -736,6 +784,7 @@ function totals(){
   return {total,missing};
 }
 function renderLines(){
+  closeSheetSuggestions();
   updateBasePanel();
   sheetBody.replaceChildren();
   const adjustments=adjustmentRows();
@@ -743,38 +792,78 @@ function renderLines(){
     const tr=sheetBody.insertRow();tr.insertCell().textContent=i+1;
     for(const key of ['name','sign','qty','unit']){
       const el=document.createElement(key==='sign'?'select':'input');
-      if(key==='name'){el.setAttribute('list','simpleOptions');el.placeholder='输入临时项，或复用参考和历史临时项'}
-      if(key==='sign'){el.append(new Option('＋ 加项','1'),new Option('－ 减项','-1'))}
+      if(key==='name'){
+        el.placeholder='输入项目名称';
+        el.autocomplete='off';
+        el.setAttribute('role','combobox');
+        el.setAttribute('aria-autocomplete','list');
+        el.setAttribute('aria-controls',rowSuggestions.id);
+        el.setAttribute('aria-expanded','false');
+      }
+      if(key==='sign'){el.append(new Option('＋ 加项','1'),new Option('－ 减项','-1'));el.disabled=Boolean(r.kind)}
       if(key==='qty'||key==='unit')el.inputMode='numeric';
-      if(key==='sign')el.disabled=Boolean(r.kind);
-      if(key==='name'||key==='unit')el.readOnly=Boolean(r.kind);
+      if(key==='unit')el.readOnly=Boolean(r.kind);
       el.value=r[key];el.setAttribute('aria-label','第'+(i+1)+'行'+({name:'项目',sign:'方向',qty:'数量',unit:'单价'}[key]));
       let before;
-      el.onfocus=()=>{before=structuredClone(r)};
-      el.oninput=()=>{
-        if(key==='name'&&picks.has(el.value)){
-          Object.assign(r,{kind:null,id:null,rev:null,model:null,priceNote:''},picks.get(el.value));el.value=r.name;
-          for(const [j,k] of ['sign','qty','unit'].entries())tr.cells[j+2].firstChild.value=r[k];
-        }else r[key]=key==='sign'?Number(el.value):el.value;
-        if(['name','sign','unit'].includes(key)){
-          tr.cells[2].firstChild.disabled=Boolean(r.kind);
-          tr.cells[4].firstChild.readOnly=Boolean(r.kind);
-        }
+      function updateLine(){
+        const direction=tr.cells[2].firstChild,unit=tr.cells[4].firstChild;
+        direction.value=r.sign;
+        direction.disabled=Boolean(r.kind);
+        unit.value=r.unit;
+        unit.readOnly=Boolean(r.kind);
+        tr.querySelector('.row-price-note').textContent=r.priceNote||'';
+      }
+      function changed(){
         $('simpleConfirm').checked=false;$('simpleDisplayConfirm').checked=false;
         totals();
+      }
+      function choose(choice){
+        Object.assign(r,choice);
+        el.value=r.name;
+        closeSheetSuggestions();
+        updateLine();
+        changed();
+        sheetReadiness();
+      }
+      el.onfocus=()=>{before=structuredClone(r)};
+      if(key==='name')el.onblur=()=>{
+        if(suggestionInput===el)closeSheetSuggestions();
+      };
+      function search(){showSheetSuggestions(el,r,choose)}
+      if(key==='name')el.oncompositionend=search;
+      el.oninput=e=>{
+        if(key==='name'&&r.kind==='rule'){
+          Object.assign(r,{kind:null,id:null,rev:null,model:null,unit:'',sign:1,priceNote:''});
+          updateLine();
+        }
+        r[key]=key==='sign'?Number(el.value):el.value;
+        if(key==='name'&&!e.isComposing)search();
+        changed();
       };
       el.onkeydown=e=>{
         if(e.isComposing||e.keyCode===229)return;
-        if(e.key==='Escape'){e.preventDefault();e.stopPropagation();if(before)Object.assign(r,before);renderLines();sheetBody.rows[i].cells[1].firstChild.focus()}
+        if(key==='name'&&['ArrowDown','ArrowUp'].includes(e.key)){
+          if(suggestionInput!==el)search();
+          else highlightSheetSuggestion(LUTON.commandPalette.moveIndex(activeSuggestion,e.key==='ArrowDown'?1:-1,suggested.length),true);
+          if(suggestionInput===el)e.preventDefault();
+          return;
+        }
+        if(e.key==='Escape'){
+          e.preventDefault();e.stopPropagation();
+          if(suggestionInput===el){closeSheetSuggestions();return}
+          if(before)Object.assign(r,before);
+          renderLines();sheetBody.rows[i].cells[1].firstChild.focus();
+        }
         if(e.key==='Enter'){
           e.preventDefault();if(e.repeat)return;
-          if(!adjustments[i+1])lines.push(emptyLine());renderLines();sheetBody.rows[i+1].cells[1].firstChild.focus();
+          if(suggestionInput===el){choose(suggested[activeSuggestion].value);return}
+          if(!adjustments[i+1])lines.push(emptyLine());
+          renderLines();sheetBody.rows[i+1].cells[1].firstChild.focus();
         }
       };
       const cell=tr.insertCell();cell.append(el);
       if(key==='name'){
         const note=document.createElement('small');note.className='row-price-note';note.textContent=r.priceNote||'';cell.append(note);
-        el.addEventListener('input',()=>{note.textContent=r.priceNote||''});
       }
     }
     tr.insertCell();

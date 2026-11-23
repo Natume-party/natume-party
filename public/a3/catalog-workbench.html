@@ -82,8 +82,8 @@ body{background:#edf2ef;color:#23352e;font:15px "Microsoft YaHei UI",system-ui,s
 .simple-catalog-tools label{flex:1 1 135px;min-width:0}
 .simple-catalog-tools select{display:block;width:100%;margin-top:4px}
 .simple-catalog-tools button{min-height:36px}
-#simpleRuleNotice:empty,#categoryNotice:empty{display:none}
-#simpleRuleNotice,#categoryNotice{color:#38564b}
+#categoryNotice:empty{display:none}
+#categoryNotice{color:#38564b}
 @media(max-width:560px){.simple-catalog-tools button{min-height:44px}.simple-catalog-tools select{min-height:44px}}
 #simpleQuote .simple-scroll th:last-child{width:112px}
 #simpleQuote .simple-scroll :is(th,td):last-child{position:sticky;right:0;background:#fff;box-shadow:-1px 0 #bbcbbf;z-index:1}
@@ -120,6 +120,11 @@ body{background:#edf2ef;color:#23352e;font:15px "Microsoft YaHei UI",system-ui,s
   .a3-shell #simpleQuote{padding:9px}
   #a3CategoryTools{padding:10px}
 }
+#a3RowSuggestions{position:fixed;z-index:30;overflow:auto;overscroll-behavior:contain;background:#fff;border:1px solid #a9c1b2;border-radius:6px;box-shadow:0 6px 18px #163c3026}
+#a3RowSuggestions [role="option"]{display:grid;gap:2px;min-height:44px;padding:8px 12px;color:#183828;cursor:pointer}
+#a3RowSuggestions [role="option"]+ [role="option"]{border-top:1px solid #e4ece7}
+#a3RowSuggestions [role="option"]:hover,#a3RowSuggestions [aria-selected="true"]{background:#e6f2e9}
+#a3RowSuggestions small{color:#476354}
 </style>
 <main><h1>报价核算工作台</h1><p><small>11 月 21 日版 · 网页试用 · 数据保存在当前设备</small></p>
 
