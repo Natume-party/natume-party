@@ -99,6 +99,27 @@ body{background:#edf2ef;color:#23352e;font:15px "Microsoft YaHei UI",system-ui,s
   #simpleBody .line-actions button{min-width:42px;min-height:44px}
   #simpleQuote .simple-scroll table{min-width:640px}
 }
+.a3-shell{--side-width:150px;padding-left:var(--side-width)}
+.a3-shell .view-switch{display:none!important}
+.a3-shell main{min-width:0;width:100%;max-width:1220px}
+.a3-shell.at-entry main{max-width:1220px;margin:0 auto}
+#a3Sidebar{position:fixed;inset:0 auto 0 0;width:var(--side-width);padding:18px 10px;display:flex;flex-direction:column;gap:8px;overflow:auto;background:#163c30;color:#fff;z-index:20}
+#a3Sidebar strong{padding:5px 6px 12px}
+#a3Sidebar button{min-height:44px;text-align:left;color:#edfbf3;background:transparent;border-color:transparent}
+#a3Sidebar button[aria-current="page"]{background:#e5f2e9;color:#174232;font-weight:700}
+#a3Sidebar button:hover{border-color:#a6cabb}
+#a3Sidebar button:last-child{margin-top:auto}
+#a3CategoryTools{padding:14px 16px}
+#a3CategoryTools h2{margin:0;font-size:18px}
+#a3CatalogSummary{color:#426253}
+@media(max-width:600px){
+  .a3-shell{--side-width:78px}
+  #a3Sidebar{padding:12px 4px}
+  #a3Sidebar strong,#a3Sidebar button{padding:6px 3px;text-align:center;font-size:13px}
+  .a3-shell main{padding:8px}
+  .a3-shell #simpleQuote{padding:9px}
+  #a3CategoryTools{padding:10px}
+}
 </style>
 <main><h1>报价核算工作台</h1><p><small>11 月 21 日版 · 网页试用 · 数据保存在当前设备</small></p>
 
@@ -165,9 +186,25 @@ function draftFx(){
 }
 function draftTime(){return new Date(date()+'T'+$('quoteTime').value).toISOString()}
 function draw(){locked=null;$('scopeConfirmed').checked=false;$('displayConfirmed').checked=false;$('publish').disabled=true;$('lock').disabled=true;const models=current(cat.models);options($('model'),models);const model=$('model').value;options($('rule'),current(cat.rules).filter(x=>x.model===model));$('count').textContent=cat.models.length+' 型号版本 / '+cat.rules.length+' 规则版本';$('detail').replaceChildren();result=null;$('export').disabled=true; if(!model){$('scope').textContent='先导入本地知识库，或新增型号。';$('total').textContent='—';$('issues').textContent='';return}try{result=CatalogCore.calculate(cat,quoteRequest());$('scope').textContent=result.model.scope+' · '+result.model.source;$('total').textContent=result.subtotal===null?'基础价缺失':(result.finalizable?'本次可锁基础及项目小计：¥ ':'条件小计（待确认）：¥ ')+result.subtotal.toLocaleString();$('issues').textContent=result.issues.map(x=>x.startsWith('人工项待供货范围复核: ')&&manual.some(m=>m.confirmed&&x==='人工项待供货范围复核: '+m.label)?x.replace('待供货范围复核','已本地确认，待锁定校验'):x).join('\n')||'';$('export').disabled=false;$('lock').disabled=!result.finalizable}catch(e){$('issues').textContent=e.message;$('total').textContent='—'}}
+function mergeImportedCatalog(next){
+  const version=row=>row.id+'@'+row.rev;
+  const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+  const incoming=new Map(next.models.map(row=>[version(row),row]));
+  const replaced=new Set();
+  const models=cat.models.map(row=>{
+    const replacement=incoming.get(version(row));
+    if(!replacement||same(row,replacement)||!a3Seed.models.some(seed=>same(seed,row)))return row;
+    replaced.add(row.id);
+    return replacement;
+  });
+  const rules=cat.rules.filter(row=>!replaced.has(row.model)||!a3Seed.rules.some(seed=>same(seed,row)));
+  const merged=V44Tools.mergeCatalog({...cat,models,rules},next);
+  if(cat.a3Families||next.a3Families)merged.a3Families={...cat.a3Families,...next.a3Families};
+  return merged;
+}
 function persist(next){CatalogCore.validate(next);localStorage.setItem(KEY,JSON.stringify(next));cat=next;draw();if(typeof renderRefs==='function')renderRefs();refreshQuoteCatalog()}
 try{const raw=localStorage.getItem(KEY);if(raw)cat=CatalogCore.validate(JSON.parse(raw))}catch(e){msg('本地读取失败：'+e.message)}
-$('file').onchange=async()=>{try{let f=$('file').files[0];if(!f)return;if(f.size>10e6)throw Error('文件过大');const next=CatalogCore.validate(JSON.parse(await f.text()));if(cat.models.length||cat.rules.length){if(!confirm('合并新版本，保留当前知识库？'))return}persist(V44Tools.mergeCatalog(cat,next));items=[];manual=[];draw();msg('已导入知识库')}catch(e){msg(e.message)}finally{$('file').value=''}};
+$('file').onchange=async()=>{try{let f=$('file').files[0];if(!f)return;if(f.size>10e6)throw Error('文件过大');const next=CatalogCore.validate(JSON.parse(await f.text()));if(cat.models.length||cat.rules.length){if(!confirm('合并新版本，保留当前知识库？'))return}persist(mergeImportedCatalog(next));items=[];manual=[];draw();msg('已导入本机目录，已保存到当前浏览器')}catch(e){msg(e.message)}finally{$('file').value=''}};
 function dl(data,name){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 $('backup').onclick=()=>dl(cat,'catalog-backup.json');$('model').onchange=()=>{items=[];manual=[];draw()};$('date').onchange=()=>{items=[];manual=[];draw()};$('add').onclick=()=>{if(!$('rule').value)return;items.push({id:$('rule').value,qty:Number($('qty').value)});draw()};$('clear').onclick=()=>{items=[];manual=[];createdAt=new Date(Math.floor(Date.now()/1000)*1000).toISOString();draw()};$('manualAdd').onclick=()=>{const m={label:$('manualName').value.trim(),amount:Number($('manualAmt').value),source:$('manualSource').value.trim()};if(!m.label||!m.source||!Number.isSafeInteger(m.amount)||!m.amount){msg('临时项目金额和依据必填');return}manual.push(m);draw()};$('export').onclick=()=>{if(!result)return;dl({schema:1,status:'CONDITIONAL_DRAFT',customer:$('customer').value,sales:$('sales').value,createdAt,exportedAt:new Date().toISOString(),...result,finalizable:false},'conditional-quote.json')};
 $('editCurrent').onclick=()=>{const isRule=$('kind').value==='rules',r=CatalogCore.latest(cat[ $('kind').value],$(isRule?'rule':'model').value,date());if(!r)return;for(const [id,v] of Object.entries({editId:r.id,label:r.label,amt:r.amount,source:r.source,editScope:r.scope,effective:r.effectiveFrom,ownerModel:r.model,coverage:r.coverage?.join(',')}))$(id).value=v??''};$('save').onclick=()=>{try{const kind=$('kind').value,r={id:$('editId').value.trim(),label:$('label').value.trim(),amount:$('amt').value===''?null:Number($('amt').value),source:$('source').value.trim(),scope:$('editScope').value.trim(),effectiveFrom:$('effective').value||null};if(kind==='rules'){r.model=$('ownerModel').value.trim();r.coverage=$('coverage').value.split(',').map(s=>s.trim()).filter(Boolean)}persist(CatalogCore.append(cat,kind,r));msg('新版本已保存（待复核）')}catch(e){msg(e.message)}};draw();

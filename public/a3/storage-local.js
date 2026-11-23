@@ -14,12 +14,11 @@ const localStorage=(()=>{
 })();
 window.addEventListener("pageshow",event=>{if(event.persisted)location.reload()});
 document.addEventListener("DOMContentLoaded",()=>{
-  const home=document.getElementById("entryHome");
+  const home=document.getElementById("a3Sidebar");
   if(!home)return;
   const logout=document.createElement("button");
   logout.type="button";
   logout.textContent="退出登录";
-  logout.style.marginTop="12px";
   logout.onclick=async()=>{
     const reply=await fetch("/a3/logout",{method:"POST"});
     if(reply.ok)location.replace("/a3/");

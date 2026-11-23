@@ -25,6 +25,11 @@ async function withinLimit(db, scope, window, max) {
   return result.meta.changes === 1;
 }
 
+async function releaseSuccessfulAttempt(db,scope,window){
+  const release="UPDATE quote_login_attempts SET used=used-1 WHERE scope=?1 AND window=?2 AND used>0";
+  await db.batch([db.prepare(release).bind(scope,window),db.prepare(release).bind("all",window)]);
+}
+
 async function readPassword(request) {
   if (!request.body || Number(request.headers.get("Content-Length") || 0) > 256) return null;
   if (!request.headers.get("Content-Type")?.startsWith("application/json")) return null;
@@ -84,6 +89,7 @@ export async function a3(request, env) {
         return json(429,{error:"尝试过多，请稍后再试"},{"Retry-After":String(windowSize-now%windowSize)});
       const tag = await sign(key,"password:"+env.A3_PASSWORD);
       if (!await verify(key,"password:"+password,tag)) return json(401,{error:"密码不正确"});
+      await releaseSuccessfulAttempt(env.A3_DB,scope,window);
       const token = (now+lifetime)+"."+crypto.randomUUID().replaceAll("-","");
       return json(200,{ok:true},{"Set-Cookie":cookie(token+"."+await sign(key,"session:"+token),lifetime)});
     }
