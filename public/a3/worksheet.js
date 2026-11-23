@@ -523,14 +523,16 @@ function highlightSheetSuggestion(index,scroll=false){
   activeSuggestion=index;
   for(const [i,option] of [...rowSuggestions.children].entries())option.setAttribute('aria-selected',String(i===index));
   const active=rowSuggestions.children[index];
+  if(!active){suggestionInput.removeAttribute('aria-activedescendant');return}
   suggestionInput.setAttribute('aria-activedescendant',active.id);
   if(scroll)active.scrollIntoView({block:'nearest',inline:'nearest'});
 }
 function showSheetSuggestions(input,row,choose){
   const query=input.value.trim();
-  if(!query){closeSheetSuggestions();return}
-  const available=picks.filter(p=>p.value.kind!=='rule'||!adjustmentRows().some(other=>other!==row&&other.kind==='rule'&&other.id===p.value.id));
-  const matches=LUTON.commandPalette.rankCommands(available,query,8);
+  const usedRules=new Set(adjustmentRows().filter(other=>other!==row&&other.kind==='rule').map(other=>other.id));
+  const available=picks.filter(p=>p.value.kind!=='rule'||!usedRules.has(p.value.id));
+  const matches=query ? LUTON.commandPalette.rankCommands(available,query,8) :
+    available.filter(p=>p.value.kind==='rule');
   if(!matches.length){closeSheetSuggestions();return}
   closeSheetSuggestions();
   suggestionInput=input;
@@ -549,7 +551,7 @@ function showSheetSuggestions(input,row,choose){
   }));
   rowSuggestions.hidden=false;
   input.setAttribute('aria-expanded','true');
-  highlightSheetSuggestion(0);
+  highlightSheetSuggestion(query?0:-1);
   positionSheetSuggestions();
 }
 rowSuggestions.addEventListener('mousedown',event=>event.preventDefault());
@@ -825,12 +827,16 @@ function renderLines(){
         changed();
         sheetReadiness();
       }
-      el.onfocus=()=>{before=structuredClone(r)};
-      if(key==='name')el.onblur=()=>{
-        if(suggestionInput===el)closeSheetSuggestions();
-      };
       function search(){showSheetSuggestions(el,r,choose)}
-      if(key==='name')el.oncompositionend=search;
+      el.onfocus=()=>{
+        before=structuredClone(r);
+        if(key==='name'&&!el.value.trim())search();
+      };
+      if(key==='name'){
+        el.onclick=()=>{if(suggestionInput!==el&&!el.value.trim())search()};
+        el.onblur=()=>{if(suggestionInput===el)closeSheetSuggestions()};
+        el.oncompositionend=search;
+      }
       el.oninput=e=>{
         if(key==='name'&&r.kind==='rule'){
           Object.assign(r,{kind:null,id:null,rev:null,model:null,unit:'',sign:1,priceNote:''});
@@ -843,8 +849,11 @@ function renderLines(){
       el.onkeydown=e=>{
         if(e.isComposing||e.keyCode===229)return;
         if(key==='name'&&['ArrowDown','ArrowUp'].includes(e.key)){
-          if(suggestionInput!==el)search();
-          else highlightSheetSuggestion(LUTON.commandPalette.moveIndex(activeSuggestion,e.key==='ArrowDown'?1:-1,suggested.length),true);
+          const wasOpen=suggestionInput===el;
+          if(!wasOpen)search();
+          if(suggestionInput===el&&(wasOpen||activeSuggestion===-1)){
+            highlightSheetSuggestion(LUTON.commandPalette.moveIndex(activeSuggestion,e.key==='ArrowDown'?1:-1,suggested.length),true);
+          }
           if(suggestionInput===el)e.preventDefault();
           return;
         }
@@ -856,7 +865,7 @@ function renderLines(){
         }
         if(e.key==='Enter'){
           e.preventDefault();if(e.repeat)return;
-          if(suggestionInput===el){choose(suggested[activeSuggestion].value);return}
+          if(suggestionInput===el&&activeSuggestion>=0){choose(suggested[activeSuggestion].value);return}
           if(!adjustments[i+1])lines.push(emptyLine());
           renderLines();sheetBody.rows[i+1].cells[1].firstChild.focus();
         }
