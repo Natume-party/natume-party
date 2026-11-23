@@ -7,7 +7,9 @@
     "directory": "./public",
     "binding": "ASSETS",
     "run_worker_first": [
-      "/api/*"
+      "/api/*",
+      "/pricing",
+      "/pricing/*"
     ]
   },
   "d1_databases": [

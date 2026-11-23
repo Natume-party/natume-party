@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>LUTON 核价中心</title><link rel="stylesheet" href="/pricing/pricing.css"><script src="/pricing/pricing.js" defer></script></head>
+<body><header class="masthead"><div><a href="/">natume.party</a><span>LUTON 核价中心</span></div><button id="logout" type="button" hidden>退出</button></header>
+<main>
+<section id="gate"><h1>进入核价中心</h1><form id="login"><label for="access">核价密码</label><input id="access" type="password" autocomplete="current-password" maxlength="128" required><button>登录</button></form><p id="login-status" role="status"></p></section>
+<section id="pricing" hidden>
+<div class="workspace"><div class="sheet-heading"><h1>设备核价</h1><span id="price-date"></span></div>
+<div class="model-block"><label for="filter">设备型号</label><input id="filter" type="search" placeholder="搜索型号或设备名称" autocomplete="off">
+<select id="models" aria-label="所选设备"></select><div class="configuration"><h2>基础价对应配置</h2><p id="equipment-config"></p><small id="configuration-status"></small>
+<details id="reference" hidden><summary>参考技术参数（供货待确认）</summary><dl id="technical"></dl></details></div>
+<div class="basis"><span>对外基础价</span><strong id="basis">—</strong></div></div>
+<div class="adjust-heading"><h2>配置增减项</h2></div>
+<div class="entry"><select id="rules" aria-label="增减项目"></select><label for="quantity">数量<input id="quantity" type="number" inputmode="numeric" min="1" step="1" value="1"></label><button type="button" id="add">添加</button></div>
+<p id="rule-note"></p><p id="quote-status" role="status"></p>
+<table id="changes" hidden><thead><tr><th scope="col">项目</th><th scope="col">数量</th><th scope="col">金额</th><th scope="col"><span class="visually-hidden">操作</span></th></tr></thead><tbody></tbody></table>
+</div>
+<aside class="total-band" aria-live="polite"><div><span id="sum-title">人民币合计</span><small id="sum-note"></small></div><output id="total">—</output></aside>
+</section>
+</main></body></html>
