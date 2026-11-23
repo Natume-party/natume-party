@@ -1,0 +1,19 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>本机报价展示</title><style>body{margin:32px auto;padding:0 20px;max-width:780px;color:#183828;font:16px system-ui}dt{font-weight:600}dd{margin:0 0 12px}strong{font-size:28px}</style>
+<a href="/a3/">返回核算中心</a><h1>本机报价展示</h1><p>读取当前浏览器的锁价记录。</p>
+<h2 id="model">等待报价</h2><strong id="amount"></strong><dl id="spec"></dl>
+<script>
+function refresh(){
+  const state=JSON.parse(localStorage.getItem("luton-a3-frozen-web-preview-v1")||"{}");
+  const q=JSON.parse(state["luton-quote-v45"]||"[]").find(v=>v.id===state["luton-quote-v45-active"]);
+  document.getElementById("model").textContent=q?.request.model||"等待报价";
+  document.getElementById("amount").textContent=q?q.currency+" "+q.amount.toLocaleString("zh-CN"):"";
+  const spec=document.getElementById("spec");
+  spec.replaceChildren();
+  for(const [k,v] of q?.config||[]){
+    const label=document.createElement("dt"), value=document.createElement("dd");
+    label.textContent=k;value.textContent=v;spec.append(label,value);
+  }
+}
+window.addEventListener("storage",refresh);refresh();
+</script></html>

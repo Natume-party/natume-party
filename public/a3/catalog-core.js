@@ -1,0 +1,16 @@
+/* V4.2 catalog candidate. Pure functions, no production data. */
+(function(root){'use strict';
+const copy=x=>JSON.parse(JSON.stringify(x));
+const safe=n=>Number.isSafeInteger(n);
+function validate(c){if(!c||c.schema!==1||!Array.isArray(c.models)||!Array.isArray(c.rules))throw Error('目录格式错误');for(const [rows,isRule] of [[c.models,false],[c.rules,true]]){const keys=new Set();for(const x of rows){if(!x.id||!x.label||!x.source||!safe(x.rev)||x.rev<1||!['STAGED','REVIEWED'].includes(x.status)||x.amount!==null&&(!safe(x.amount)||!isRule&&x.amount<=0))throw Error('无效条目');if(x.effectiveFrom!=null&&!/^\d{4}-\d{2}-\d{2}$/.test(x.effectiveFrom))throw Error('生效日期错误');if(x.status==='REVIEWED'&&(!x.effectiveFrom||x.amount===null||!x.scope))throw Error('已核条目缺少价格、日期或供货边界');if(keys.has(x.id+'@'+x.rev))throw Error('重复版本');keys.add(x.id+'@'+x.rev);if(isRule&&(!c.models.some(m=>m.id===x.model)||!Array.isArray(x.coverage)||!x.coverage.length||new Set(x.coverage).size!==x.coverage.length))throw Error('规则范围不明确');}}return c;}
+function latest(rows,id,date){const a=rows.filter(r=>r.id===id&&(!r.effectiveFrom||r.effectiveFrom<=date));return a.sort((x,y)=>y.rev-x.rev)[0];}
+function reviewed(rows,id,date){
+  return latest(rows.filter(row=>row.status==='REVIEWED'),id,date);
+}
+function quoteRow(rows,id,date){
+  return reviewed(rows,id,date) || latest(rows,id,date);
+}
+function append(c,kind,row){validate(c);const n=copy(c),list=n[kind];if(!['models','rules'].includes(kind))throw Error('条目类型错误');const revisions=list.filter(x=>x.id===row.id);list.push({...copy(row),rev:Math.max(0,...revisions.map(x=>x.rev))+1,status:'STAGED'});return validate(n);}
+function calculate(c,{model,date,items=[],manual=[]}){validate(c);if(!/^\d{4}-\d{2}-\d{2}$/.test(date))throw Error('报价日期无效');const m=quoteRow(c.models,model,date);if(!m)throw Error('找不到适用型号');const issues=[],detail=[],coverage=new Set(),ids=new Set();let total=m.amount;const stage=x=>{if(x.status!=='REVIEWED'||!x.effectiveFrom||!x.scope)issues.push('待复核: '+x.label);if(x.amount===null)issues.push('缺价: '+x.label);};stage(m);for(const i of items){const r=quoteRow(c.rules,i.id,date);if(!r||r.model!==model){issues.push('规则不适用: '+i.id);continue}if(ids.has(r.id)||r.coverage.some(k=>coverage.has(k))){issues.push('重复计价: '+r.label);continue}if(!safe(i.qty)||i.qty<=0||r.maxQty!=null&&i.qty>r.maxQty)throw Error('数量错误或超过规则上限');ids.add(r.id);r.coverage.forEach(k=>coverage.add(k));stage(r);const amount=r.amount===null?null:r.amount*i.qty;if(amount!==null&&!safe(amount))throw Error('金额溢出');detail.push({...copy(r),qty:i.qty,lineAmount:amount});if(amount===null)total=null;if(total!==null&&amount!==null){total+=amount;if(!safe(total))throw Error('金额溢出');}}for(const i of manual){if(!i.label||!i.source||!safe(i.amount)||i.amount===0)throw Error('人工项缺依据或金额错误');detail.push({...copy(i),kind:'MANUAL',lineAmount:i.amount});issues.push('人工项待供货范围复核: '+i.label);if(total!==null){total+=i.amount;if(!safe(total))throw Error('金额溢出');}}if(total===null||total<=0)issues.push('总价未确认');return {model:copy(m),date,detail,subtotal:total,issues,finalizable:issues.length===0};}
+const api={validate,latest,reviewed,quoteRow,append,calculate};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.CatalogCore=api;
+})(typeof globalThis!=='undefined'?globalThis:this);

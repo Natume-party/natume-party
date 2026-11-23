@@ -1,4 +1,4 @@
-import { pricing, pricingAsset } from "./pricing.js";
+import { a3 } from "./a3.js";
 
 // Natume guestbook API. All visitor posts require moderation; the admin key
 // is not present in source or browser storage. Only its SHA-256 digest is in D1.
@@ -80,10 +80,8 @@ async function api(r,env) {
 export default {
   async fetch(r,env) {
     const path=new URL(r.url).pathname;
-    if(path.startsWith("/api/quote/")){
-      try{return await pricing(r,env)}catch{return err(503,"核价服务暂不可用");}
-    }
-    if(path==="/pricing"||path.startsWith("/pricing/"))return pricingAsset(r,env);
+    if(path==="/a3"||path.startsWith("/a3/"))return a3(r,env);
+    if(path==="/pricing"||path.startsWith("/pricing/")||path.startsWith("/api/quote/"))return new Response(null,{status:404});
     if(!path.startsWith("/api/"))return env.ASSETS.fetch(r);
     try{return await api(r,env)}catch(e){console.error("Guestbook API failure",e?.name||"unknown");return err(503,"留言服务暂时不可用");}
   }

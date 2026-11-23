@@ -9,7 +9,9 @@
     "run_worker_first": [
       "/api/*",
       "/pricing",
-      "/pricing/*"
+      "/pricing/*",
+      "/a3",
+      "/a3/*"
     ]
   },
   "d1_databases": [
@@ -19,9 +21,9 @@
       "database_id": "ae07ac2b-8d57-44b4-95ff-f46528503ca5"
     },
     {
-      "binding": "QUOTE_DB",
-      "database_name": "natume-quote-prod",
-      "database_id": "b62e66a5-f137-4379-aa7b-3f7f46600e7b"
+      "binding": "A3_DB",
+      "database_name": "natume-a3-preview",
+      "database_id": "e328e996-4240-44f5-aff7-ad2218ed9a1d"
     }
   ],
   "previews": {
@@ -32,5 +34,6 @@
         "database_id": "70ac212a-c4b5-4b78-a204-3029b21b3230"
       }
     ]
-  }
+  },
+  "preview_urls": false
 }

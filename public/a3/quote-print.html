@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>设备报价单</title>
+<style>
+*{box-sizing:border-box}body{color:#18352c;font:14px/1.5 "Microsoft YaHei UI","Microsoft YaHei",system-ui,sans-serif;
+max-width:900px;margin:1.5rem auto;padding:0 20px}
+.quote-header{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:13px;
+padding-bottom:9px;border-bottom:2px solid #215744}
+.quote-header h1{margin:0;font-size:30px}.quote-logo{display:block;width:130px;height:auto;max-width:36%}
+.company-signature{margin-top:169px;text-align:right;font-weight:700;break-inside:avoid}
+h2{margin:18px 0 7px;font-size:16px}button{margin-bottom:12px;padding:7px 12px;font:inherit}
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:5px 18px;overflow-wrap:anywhere}
+.meta strong{margin-right:.5em}.identifier{color:#406055;font-size:12px}
+table{border-collapse:collapse;width:100%;table-layout:fixed}
+th,td{padding:7px 9px;border:1px solid #bccdc4;text-align:left;vertical-align:middle;overflow-wrap:anywhere}
+th{background:#e7f1eb;color:#244a3a}
+.project-list :is(th,td):last-child{width:18%;text-align:right;font-variant-numeric:tabular-nums}
+ul{margin:5px 0 14px;padding-left:20px}li{overflow-wrap:anywhere}
+.total{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin:18px 0 0 auto;
+width:min(100%,420px);padding:10px 13px;background:#f1f6f3;border:1px solid #bccdc4;color:#123b2a}
+.total strong{font-size:20px;font-variant-numeric:tabular-nums}
+@page{size:A4;margin:14mm 15mm}
+@media print{button{display:none}body{margin:0;padding:0;max-width:none;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+h2{break-after:avoid}thead{display:table-header-group}tr,.base,.total{break-inside:avoid}}
+@media(max-width:500px){body{padding:0 10px}.meta{grid-template-columns:1fr}th,td{padding:6px 4px}}
+</style></head><body>
+<button type="button" onclick="window.print()">打印 / 另存 PDF</button>
+<header class="quote-header"><h1>设备报价单</h1><img class="quote-logo" src="/a3/quote-logo.png" alt="LUTON 北方路通"></header>
+<div class="meta">
+<div><strong>客户</strong><span id="customer"></span></div><div><strong>报价日期</strong><span id="date"></span></div>
+<div><strong>业务员</strong><span id="sales"></span></div><div class="identifier">单号 <span id="snapshotId"></span></div>
+</div>
+<section class="base"><h2>设备</h2>
+<table class="project-list"><thead><tr><th>项目名称</th><th>数量</th></tr></thead>
+<tbody><tr><td id="quoteModel"></td><td></td></tr></tbody></table>
+</section>
+<div id="projects"></div>
+<div class="total"><span>报价总额</span><strong id="snapshotAmount"></strong></div>
+<footer class="company-signature">潍坊市路通机械电子有限公司</footer>
+<script src="/a3/print-local.js"></script></body></html>

@@ -41,3 +41,11 @@ natume.party 个人网站：一个《我的世界》风格的方块小世界。�
 - `public/og.jpg`、`public/apple-touch-icon.png`：分享预览图和手机桌面图标
 - `public/vendor/`：three.js 0.186.1（MIT，见 `three-LICENSE.txt`），已压缩
 - `wrangler.jsonc`：Cloudflare 部署配置
+
+## A3 核算中心试用
+
+网站的 `/a3/` 使用 2026 年 11 月 21 日存档的核算工作台。每行的加号在当前行下方插行，减号删除当前行。电脑端沿用回车跳到下一行及末行自动加行。
+
+报价目录、草稿、历史和打印快照保存在当前浏览器。电脑和手机各自保存。网页预载合成目录，可以从本机导入自己的目录。本机展示适用于同一浏览器中的不同标签页。
+
+Cloudflare 的 `A3_PASSWORD` 和 `A3_SESSION_KEY` 负责登录。独立 D1 绑定 `A3_DB` 只记录限流计数，结构在 `a3-login.sql`。`/pricing/` 为归档入口。
