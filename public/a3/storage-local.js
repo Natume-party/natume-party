@@ -3,8 +3,13 @@ const localStorage=(()=>{
   const initial={ "quote-catalog-v42":JSON.stringify(a3Seed) };
   const read=()=>JSON.parse(store.getItem(key)||JSON.stringify(initial));
   const edit=update=>{const state=read();update(state);store.setItem(key,JSON.stringify(state))};
-  const setItem=(name,value)=>edit(state=>{
+  const setItem=(name,value,details)=>edit(state=>{
     state[name]=String(value);
+    if(details&&Object.values(details.fields).some(Boolean)){
+      const records=JSON.parse(state["quote-local-details-v1"]||"{}");
+      records[details.id]=details.fields;
+      state["quote-local-details-v1"]=JSON.stringify(records);
+    }
     if(name==="luton-quote-v45"&&state["quote-drafts-v1"]){
       const locked=new Set(JSON.parse(value).map(quote=>quote.id));
       state["quote-drafts-v1"]=JSON.stringify(JSON.parse(state["quote-drafts-v1"]).filter(draft=>!locked.has(draft.id)));

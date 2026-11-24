@@ -441,7 +441,7 @@ $('pastCalculations').onclick=()=>{toggleHome(false);showCenter()};
 const defaultFields=captureFields();
 const simple=document.createElement('section');
 simple.id='simpleQuote';simple.hidden=true;main.append(simple);
-simple.innerHTML='<header><button id="simpleBack">返回历史</button><h1>新建核算</h1></header><div class="simple-meta"><label>客户<input id="simpleCustomer"></label><label>业务员<input id="simpleSales"></label><label>报价日期<input type="date" id="simpleDate"></label></div><section class="simple-base"><h2>设备基础价</h2><div class="simple-base-fields"><label>设备型号<select id="simpleModel"></select></label><div><span>基础价（人民币）</span><strong id="simpleBaseAmount">—</strong><small id="simpleBaseStatus"></small><small id="simpleBaseConfig"></small></div></div></section><h2 class="simple-adjustments-title">设备增减项</h2><div class="simple-scroll"><table><thead><tr><th>行</th><th>增减项目</th><th>加 / 减</th><th>数量</th><th>单价（元）</th><th>金额（元）</th><th>行操作</th></tr></thead><tbody id="simpleBody"></tbody></table></div><div class="simple-bottom"><button id="simpleAdd">＋ 添加临时项</button><div class="simple-summary"><span id="simpleDelta"></span><strong id="simpleTotal"></strong></div></div><details id="sheetFinalize" class="sheet-final"><summary>核价确认、对外配置与币种</summary><div class="fields"><label>复核人<input id="simpleReviewer"></label><label>核价依据<input id="simpleEvidence"></label><label>报价币种<select id="simpleCurrency"><option>CNY</option><option>USD</option><option>EUR</option><option>RUB</option><option>VND</option><option>JPY</option><option>GBP</option><option>AED</option><option>SAR</option><option>THB</option><option>IDR</option></select></label></div><div id="simpleFx" class="fields" hidden><label>1 CNY = 外币<input id="simpleRate"></label><label>汇率来源<input id="simpleRateSource"></label><label>汇率时间<input id="simpleRateTime" type="datetime-local"></label><label><input id="simpleRateConfirm" type="checkbox">已人工核对汇率</label></div><label>对外配置<textarea id="simpleConfig" rows="3" placeholder="每行填写 项目=规格"></textarea></label><label><input id="simpleConfirm" type="checkbox">已核对单价及供货范围</label><label><input id="simpleDisplayConfirm" type="checkbox">已核对客户展示内容</label></details><p id="simpleForeignPreview"></p><p id="simpleBlockers" role="status"></p><footer><button id="simpleSave">保存草稿</button><button id="simpleAdvanced">本机展示</button><button id="simpleRevoke">撤销展示</button><button class="primary" id="simplePrint">输出报价单</button></footer><p id="simpleNote" role="status"></p>';
+simple.innerHTML='<header><button id="simpleBack">返回历史</button><h1>新建核算</h1></header><div class="simple-meta"><label>客户<input id="simpleCustomer"></label><label>业务员<input id="simpleSales"></label><label>联系方式<input id="simpleContact" maxlength="200"></label><label>报价日期<input type="date" id="simpleDate"></label><label class="simple-remarks">备注<textarea id="simpleRemarks" rows="2" maxlength="2000"></textarea></label></div><section class="simple-base"><h2>设备基础价</h2><div class="simple-base-fields"><label>设备型号<select id="simpleModel"></select></label><div><span>基础价（人民币）</span><strong id="simpleBaseAmount">—</strong><small id="simpleBaseStatus"></small><small id="simpleBaseConfig"></small></div></div></section><h2 class="simple-adjustments-title">设备增减项</h2><div class="simple-scroll"><table><thead><tr><th>行</th><th>增减项目</th><th>加 / 减</th><th>数量</th><th>单价（元）</th><th>金额（元）</th><th>行操作</th></tr></thead><tbody id="simpleBody"></tbody></table></div><div class="simple-bottom"><button id="simpleAdd">＋ 添加临时项</button><div class="simple-summary"><span id="simpleDelta"></span><strong id="simpleTotal"></strong></div></div><details id="sheetFinalize" class="sheet-final"><summary>核价确认、对外配置与币种</summary><div class="fields"><label>复核人<input id="simpleReviewer"></label><label>核价依据<input id="simpleEvidence"></label><label>报价币种<select id="simpleCurrency"><option>CNY</option><option>USD</option><option>EUR</option><option>RUB</option><option>VND</option><option>JPY</option><option>GBP</option><option>AED</option><option>SAR</option><option>THB</option><option>IDR</option></select></label></div><div id="simpleFx" class="fields" hidden><label>1 CNY = 外币<input id="simpleRate"></label><label>汇率来源<input id="simpleRateSource"></label><label>汇率时间<input id="simpleRateTime" type="datetime-local"></label><label><input id="simpleRateConfirm" type="checkbox">已人工核对汇率</label></div><label>对外配置<textarea id="simpleConfig" rows="3" placeholder="每行填写 项目=规格"></textarea></label><label><input id="simpleConfirm" type="checkbox">已核对单价及供货范围</label><label><input id="simpleDisplayConfirm" type="checkbox">已核对客户展示内容</label></details><p id="simpleForeignPreview"></p><p id="simpleBlockers" role="status"></p><footer><button id="simpleSave">保存草稿</button><button id="simpleAdvanced">本机展示</button><button id="simpleRevoke">撤销展示</button><button class="primary" id="simplePrint">输出报价单</button></footer><p id="simpleNote" role="status"></p>';
 aux.insertAdjacentHTML('afterbegin','<section id="a3CategoryTools"><h2>价格目录</h2><p id="a3CatalogSummary" role="status"></p><div class="simple-catalog-tools"><label>类型<select id="categoryKind"><option value="model">设备基础价</option><option value="rule">设备增减项</option><option value="reference">配套参考</option></select></label><label>项目<select id="categoryItem"></select></label><label>分类<select id="categoryFamily"></select></label><button type="button" id="categorySave">保存分类</button></div><p id="categoryNotice" role="status"></p><button type="button" id="simpleImportLocal">导入本机目录</button></section>');
 aux.querySelector('summary').textContent='信息维护';
 $('file').closest('label').hidden=true;
@@ -935,7 +935,8 @@ function sheetData(){
   const config=$('simpleConfig').value.split('\n').filter(x=>x.trim()).map(x=>{
     const split=x.indexOf('=');return split<1?[]:[x.slice(0,split).trim(),x.slice(split+1).trim()];
   });
-  return {values,model,date,meta:{id:sheetId,parentQuoteId:sheetParent,customer:$('simpleCustomer').value.trim(),
+  const internalFields=Object.fromEntries(internalSheetFieldIds.map(id=>[id,$(id).value.trim()]));
+  return {values,model,date,internalFields,meta:{id:sheetId,parentQuoteId:sheetParent,customer:$('simpleCustomer').value.trim(),
     sales:$('simpleSales').value.trim(),createdAt:openedAt,quotedAt:new Date().toISOString(),
     reviewer:$('simpleReviewer').value.trim(),evidence:$('simpleEvidence').value.trim(),
     scopeConfirmed:$('simpleConfirm').checked,config,fx},displayConfirmed:$('simpleDisplayConfirm').checked,configText:$('simpleConfig').value};
@@ -958,7 +959,7 @@ function buildSheetSnapshot(data){
 }
 function sheetFingerprint(data){
   return JSON.stringify([data.values,data.date,data.meta.customer,data.meta.sales,data.meta.reviewer,data.meta.evidence,
-    data.meta.scopeConfirmed,data.meta.config,data.meta.fx]);
+    data.meta.scopeConfirmed,data.meta.config,data.meta.fx,data.internalFields]);
 }
 let frozenSheet=null, frozenFingerprint='';
 function sheetReadiness(){
@@ -980,7 +981,10 @@ function runOutput(publish){
     const fingerprint=sheetFingerprint(data);
     if(frozenFingerprint!==fingerprint){
       const saved=buildSheetSnapshot(data);
-      V45.save(localStorage,saved);
+      V45.save({
+        getItem:localStorage.getItem,
+        setItem:(key,value)=>localStorage.setItem(key,value,{id:saved.id,fields:data.internalFields})
+      },saved);
       frozenSheet=V45.read(localStorage).find(q=>q.id===saved.id);
       frozenFingerprint=fingerprint;
       sheetParent=frozenSheet.id;sheetId=crypto.randomUUID();sheetStart=sheetFormState();
@@ -1005,7 +1009,8 @@ $('simpleAdvanced').onclick=()=>runOutput(true);
 $('simpleRevoke').onclick=()=>{
   try{localStorage.removeItem(V45.ACTIVE);$('simpleNote').textContent='主机已撤销展示'}catch(e){$('simpleNote').textContent=e.message}
 };
-const sheetFieldIds=['simpleReviewer','simpleEvidence','simpleConfig','simpleConfirm','simpleDisplayConfirm','simpleCurrency','simpleRate','simpleRateSource','simpleRateTime','simpleRateConfirm'];
+const internalSheetFieldIds=['simpleContact','simpleRemarks'];
+const sheetFieldIds=[...internalSheetFieldIds,'simpleReviewer','simpleEvidence','simpleConfig','simpleConfirm','simpleDisplayConfirm','simpleCurrency','simpleRate','simpleRateSource','simpleRateTime','simpleRateConfirm'];
 function sheetFormState(){return JSON.stringify([fingerprint(),sheetFieldIds.map(id=>$(id).type==='checkbox'?$(id).checked:$(id).value)])}
 function recallSheetFields(record){
   const saved=record?.sheetFields||{};
@@ -1078,6 +1083,19 @@ function editLocked(q){
   saveStatus.textContent='正在修订历史报价 · 原单 '+q.id+'。请核对当前价格与配置。';
   savedContent='';group.open=true;
 }
+function savedInternalFields(id){
+  return JSON.parse(localStorage.getItem('quote-local-details-v1')||'{}')[id]||{};
+}
+const historyNotes=document.createElement('p');
+historyNotes.className='quote-history-notes';
+summary.after(historyNotes);
+$('v45History').addEventListener('change',()=>{
+  const fields=savedInternalFields($('v45History').value);
+  historyNotes.textContent=[fields.simpleContact?'联系方式 '+fields.simpleContact:'',
+    fields.simpleRemarks?'备注 '+fields.simpleRemarks:''].filter(Boolean).join('\n');
+  historyNotes.hidden=!historyNotes.textContent;
+});
+historyNotes.hidden=true;
 const editHistory=document.createElement('button');editHistory.id='editHistory';editHistory.textContent='修改这笔核算';
 summary.after(editHistory);editHistory.onclick=()=>{
   const q=selectedQuote();
@@ -1086,7 +1104,7 @@ summary.after(editHistory);editHistory.onclick=()=>{
   const sheetLines=q.worksheet.lines.map(r=>({kind:r.kind==='manual'?null:r.kind,id:r.id,rev:r.rev,name:r.name,qty:String(r.qty),
     unit:String(Math.abs(r.unit)),sign:r.unit<0?-1:1,model:r.kind==='model'?r.id:null}));
   beginSheet({parent:q.id,fields:{customer:q.customer,sales:q.sales},sheetLines,
-    sheetFields:{simpleConfig:q.config.map(pair=>pair.join('=')).join('\n'),simpleCurrency:q.currency}});
+    sheetFields:{...savedInternalFields(q.id),simpleConfig:q.config.map(pair=>pair.join('=')).join('\n'),simpleCurrency:q.currency}});
 };
 
 addReprint();

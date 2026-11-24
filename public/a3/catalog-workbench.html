@@ -59,7 +59,12 @@ body{background:#edf2ef;color:#23352e;font:15px "Microsoft YaHei UI",system-ui,s
 }
 #sheetFinalize textarea{width:100%;min-width:0;font:inherit;padding:7px 9px;border:1px solid #b3c4ba;border-radius:3px;resize:vertical}
 #sheetFinalize input[type=checkbox]{margin:0 2px 0 0}
+#simpleQuote .simple-meta{flex-wrap:wrap}
 #simpleQuote .simple-meta label{min-width:0}
+#simpleQuote .simple-meta label.simple-remarks{flex:1 0 100%}
+#simpleQuote .simple-meta :is(input,textarea){display:block;width:100%;min-width:0;margin-top:4px}
+#simpleQuote .simple-meta textarea{font:inherit;padding:7px;border:1px solid #b3c4ba;border-radius:3px;resize:vertical}
+.quote-history-notes{white-space:pre-wrap;overflow-wrap:anywhere}
 #simpleQuote footer{flex-wrap:wrap}
 @media(max-width:600px){
   #sheetFinalize .fields{grid-template-columns:minmax(0,1fr)}
